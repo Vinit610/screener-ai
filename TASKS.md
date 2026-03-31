@@ -419,16 +419,16 @@ Create the following files. Each returns a placeholder response so Railway deplo
 
 ### P2.4 — Railway Deployment
 
-- [ ] **BE-11** Create `backend/Procfile`:
+- [x] **BE-11** Create `backend/Procfile`:
   ```
   web: uvicorn main:app --host 0.0.0.0 --port $PORT
   ```
 
-- [ ] **BE-12** Add all environment variables to the Railway project dashboard (Settings → Variables). Copy from your local `backend/.env`.
+- [x] **BE-12** Add all environment variables to the Railway project dashboard (Settings → Variables). Copy from your local `backend/.env`.
 
-- [ ] **BE-13** Push to `main`. Watch Railway deploy. Hit `https://<your-railway-url>/health` — confirm `{"status": "ok", "version": "0.1.0"}`.
+- [x] **BE-13** Push to `main`. Watch Railway deploy. Hit `https://<your-railway-url>/health` — confirm `{"status": "ok", "version": "0.1.0"}`.
 
-- [ ] **BE-14** In Railway settings → Networking: ensure "Sleep on inactivity" is **disabled**. SSE streaming connections require a persistent server.
+- [x] **BE-14** In Railway settings → Networking: ensure "Sleep on inactivity" is **disabled**. SSE streaming connections require a persistent server.
 
 - [ ] **BE-15** Copy the Railway production URL. Update `NEXT_PUBLIC_BACKEND_URL` in Vercel env vars (you'll add this properly in Phase 3).
 
