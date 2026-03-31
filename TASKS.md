@@ -318,7 +318,7 @@
 
 ### P2.1 — Python Project Initialization
 
-- [ ] **BE-01** 🔑 Initialize the backend project:
+- [x] **BE-01** 🔑 Initialize the backend project:
   ```bash
   cd backend
   uv init
@@ -328,7 +328,7 @@
   uv add --dev pytest pytest-asyncio httpx
   ```
 
-- [ ] **BE-02** Create `backend/config.py` using `pydantic-settings`. All env vars must be validated at startup — the app must crash immediately with a clear error if any required var is missing:
+- [x] **BE-02** Create `backend/config.py` using `pydantic-settings`. All env vars must be validated at startup — the app must crash immediately with a clear error if any required var is missing:
   ```python
   from pydantic_settings import BaseSettings
 
@@ -347,7 +347,7 @@
   settings = Settings()
   ```
 
-- [ ] **BE-03** Create `backend/database.py` — Supabase client singleton using the `service_role` key:
+- [x] **BE-03** Create `backend/database.py` — Supabase client singleton using the `service_role` key:
   ```python
   from supabase import create_client, Client
   from config import settings
@@ -361,7 +361,7 @@
       return _client
   ```
 
-- [ ] **BE-04** Create `backend/cache.py` — Upstash Redis client with typed helpers:
+- [x] **BE-04** Create `backend/cache.py` — Upstash Redis client with typed helpers:
   ```python
   import json
   from upstash_redis import Redis
@@ -379,7 +379,7 @@
 
 ### P2.2 — FastAPI App Entry Point
 
-- [ ] **BE-05** 🔑 Create `backend/main.py`:
+- [x] **BE-05** 🔑 Create `backend/main.py`:
   ```python
   from fastapi import FastAPI
   from fastapi.middleware.cors import CORSMiddleware
@@ -411,11 +411,11 @@
 
 Create the following files. Each returns a placeholder response so Railway deployment succeeds:
 
-- [ ] **BE-06** `backend/routers/stocks.py` — prefix `/api/stocks`, placeholder `GET /`
-- [ ] **BE-07** `backend/routers/mf.py` — prefix `/api/mf`, placeholder `GET /`
-- [ ] **BE-08** `backend/routers/ai.py` — prefix `/api/ai`, placeholder `GET /`
-- [ ] **BE-09** `backend/routers/portfolio.py` — prefix `/api/portfolio`, placeholder `GET /`
-- [ ] **BE-10** `backend/routers/auth.py` — prefix `/api/auth`, placeholder `GET /`
+- [x] **BE-06** `backend/routers/stocks.py` — prefix `/api/stocks`, placeholder `GET /`
+- [x] **BE-07** `backend/routers/mf.py` — prefix `/api/mf`, placeholder `GET /`
+- [x] **BE-08** `backend/routers/ai.py` — prefix `/api/ai`, placeholder `GET /`
+- [x] **BE-09** `backend/routers/portfolio.py` — prefix `/api/portfolio`, placeholder `GET /`
+- [x] **BE-10** `backend/routers/auth.py` — prefix `/api/auth`, placeholder `GET /`
 
 ### P2.4 — Railway Deployment
 
