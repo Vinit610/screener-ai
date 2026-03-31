@@ -104,7 +104,7 @@
 
 - [ ] **SETUP-06** **Vercel:** Create account at vercel.com → Import the GitHub repo → Set root directory to `/frontend`. Do **not** deploy yet — frontend isn't built. Just connect the repo.
 
-- [ ] **SETUP-07** Collect all real values and create `backend/.env` and `pipeline/.env` (both gitignored) from `.env.example`. You should now have every secret filled in.
+- [x] **SETUP-07** Collect all real values and create `backend/.env` and `pipeline/.env` (both gitignored) from `.env.example`. You should now have every secret filled in.
 
 ---
 
