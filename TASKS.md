@@ -42,9 +42,9 @@
 
 ### P0.1 — Repository Structure
 
-- [ ] **SETUP-01** 🔑 Create GitHub repository `screener-ai` (private). Initialize with `README.md` and clone locally.
+- [x] **SETUP-01** 🔑 Create GitHub repository `screener-ai` (private). Initialize with `README.md` and clone locally.
 
-- [ ] **SETUP-02** Create the monorepo folder structure by running:
+- [x] **SETUP-02** Create the monorepo folder structure by running:
   ```bash
   mkdir -p backend/routers backend/services backend/tests
   mkdir -p frontend/src
@@ -68,7 +68,7 @@
   └── .env.example
   ```
 
-- [ ] **SETUP-03** Create `.env.example` at repo root:
+- [x] **SETUP-03** Create `.env.example` at repo root:
   ```dotenv
   # ── Supabase ──────────────────────────────────────────
   SUPABASE_URL=https://xxxx.supabase.co
@@ -92,7 +92,7 @@
   NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
   ```
 
-- [ ] **SETUP-04** Create root `.gitignore` covering:
+- [x] **SETUP-04** Create root `.gitignore` covering:
   - Python: `__pycache__/`, `.venv/`, `*.pyc`, `.pytest_cache/`, `*.egg-info/`
   - Node: `node_modules/`, `.next/`, `dist/`
   - Env: `.env`, `.env.local`, `.env.*.local`
@@ -100,7 +100,7 @@
 
 ### P0.2 — Remaining Services
 
-- [ ] **SETUP-05** **Upstash:** Create account at upstash.com → Create Redis database → Choose region closest to Railway deployment. Copy REST URL and REST token into your local `.env`.
+- [x] **SETUP-05** **Upstash:** Create account at upstash.com → Create Redis database → Choose region closest to Railway deployment. Copy REST URL and REST token into your local `.env`.
 
 - [ ] **SETUP-06** **Vercel:** Create account at vercel.com → Import the GitHub repo → Set root directory to `/frontend`. Do **not** deploy yet — frontend isn't built. Just connect the repo.
 
