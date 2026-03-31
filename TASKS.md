@@ -102,7 +102,7 @@
 
 - [x] **SETUP-05** **Upstash:** Create account at upstash.com → Create Redis database → Choose region closest to Railway deployment. Copy REST URL and REST token into your local `.env`.
 
-- [ ] **SETUP-06** **Vercel:** Create account at vercel.com → Import the GitHub repo → Set root directory to `/frontend`. Do **not** deploy yet — frontend isn't built. Just connect the repo.
+- [x] **SETUP-06** **Vercel:** Create account at vercel.com → Import the GitHub repo → Set root directory to `/frontend`. Do **not** deploy yet — frontend isn't built. Just connect the repo.
 
 - [x] **SETUP-07** Collect all real values and create `backend/.env` and `pipeline/.env` (both gitignored) from `.env.example`. You should now have every secret filled in.
 
@@ -114,7 +114,7 @@
 
 ### P1.1 — Core Schema Migration
 
-- [ ] **DB-01** 🔑 Create `supabase/migrations/001_initial_schema.sql`. Open the Supabase SQL editor and run this file. It must contain all of the following in order:
+- [x] **DB-01** 🔑 Create `supabase/migrations/001_initial_schema.sql`. Open the Supabase SQL editor and run this file. It must contain all of the following in order:
 
   **`stocks` table:**
   ```sql
@@ -301,14 +301,14 @@
 
 ### P1.4 — Seed Data for Development
 
-- [ ] **DB-07** Create `supabase/migrations/002_dev_seed.sql` with:
+- [x] **DB-07** Create `supabase/migrations/002_dev_seed.sql` with:
   - 10 rows in `stocks` (mix of sectors: IT, Banking, FMCG, Pharma, Auto)
   - 10 corresponding rows in `stock_fundamentals` with varied PE/ROE/D:E values
   - 5 rows in `mutual_funds` (Large Cap, ELSS, Flexi Cap)
   - Use real ticker symbols (e.g., RELIANCE, INFY, TCS, HDFCBANK, ASIANPAINT)
   - **Run only in dev Supabase project, never production**
 
-- [ ] **DB-08** Run `002_dev_seed.sql` in your dev Supabase project. Verify data in Table Editor.
+- [x] **DB-08** Run `002_dev_seed.sql` in your dev Supabase project. Verify data in Table Editor.
 
 ---
 
