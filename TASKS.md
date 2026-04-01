@@ -249,7 +249,7 @@
   );
   ```
 
-- [ ] **DB-02** Add all indexes (append to `001_initial_schema.sql` or run separately):
+- [x] **DB-02** Add all indexes (append to `001_initial_schema.sql` or run separately):
   ```sql
   CREATE INDEX idx_stocks_symbol   ON stocks(symbol);
   CREATE INDEX idx_stocks_sector   ON stocks(sector);
@@ -263,7 +263,7 @@
 
 ### P1.2 — Row Level Security
 
-- [ ] **DB-03** Enable RLS and add policies for `portfolio_holdings`:
+- [x] **DB-03** Enable RLS and add policies for `portfolio_holdings`:
   ```sql
   ALTER TABLE portfolio_holdings ENABLE ROW LEVEL SECURITY;
   CREATE POLICY "Users see own holdings"
@@ -271,7 +271,7 @@
       USING (auth.uid() = user_id);
   ```
 
-- [ ] **DB-04** Enable RLS and add policies for `user_profiles`:
+- [x] **DB-04** Enable RLS and add policies for `user_profiles`:
   ```sql
   ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
   CREATE POLICY "Users see own profile"
@@ -440,18 +440,18 @@ Create the following files. Each returns a placeholder response so Railway deplo
 
 ### P3.1 — Project Initialization
 
-- [ ] **FE-01** 🔑 Bootstrap Next.js inside `/frontend`:
+- [x] **FE-01** 🔑 Bootstrap Next.js inside `/frontend`:
   ```bash
   pnpm create next-app@latest . --typescript --tailwind --app --src-dir --import-alias "@/*"
   ```
   Answer prompts: Use App Router = Yes, src/ dir = Yes.
 
-- [ ] **FE-02** Install additional dependencies:
+- [x] **FE-02** Install additional dependencies:
   ```bash
   pnpm add @supabase/supabase-js @supabase/ssr zustand recharts lucide-react clsx
   ```
 
-- [ ] **FE-03** Configure `tailwind.config.ts`:
+- [x] **FE-03** Configure `tailwind.config.ts`:
   - Set `darkMode: 'class'`
   - Extend theme with custom colors:
     ```ts
@@ -466,31 +466,31 @@ Create the following files. Each returns a placeholder response so Railway deplo
     }
     ```
 
-- [ ] **FE-04** Update `app/layout.tsx`:
+- [x] **FE-04** Update `app/layout.tsx`:
   - Add `dark` class to `<html>` element (dark mode always on)
   - Add Inter font via `next/font/google`
   - Add a global disclaimer bar at the very top: `"All AI outputs are educational insights only, not investment advice."`
   - Set `<body>` background to `bg-background text-white`
 
-- [ ] **FE-05** Create `frontend/.env.local` from `.env.example`. Fill in Supabase anon key and Railway backend URL.
+- [x] **FE-05** Create `frontend/.env.local` from `.env.example`. Fill in Supabase anon key and Railway backend URL.
 
 ### P3.2 — Page Routes
 
 Create all page route files. Each should return a styled placeholder `<div>` with the page name — this lets Vercel deploy successfully:
 
-- [ ] **FE-06** `app/page.tsx` — Landing page with product name, tagline, and "→ Open Screener" button
-- [ ] **FE-07** `app/screener/page.tsx` — Placeholder: "Screener (coming soon)"
-- [ ] **FE-08** `app/mf/page.tsx` — Placeholder: "MF Screener (coming soon)"
-- [ ] **FE-09** `app/stock/[symbol]/page.tsx` — Placeholder showing `params.symbol`
-- [ ] **FE-10** `app/compare/page.tsx` — Placeholder
-- [ ] **FE-11** `app/portfolio/page.tsx` — Placeholder
-- [ ] **FE-12** `app/paper-trading/page.tsx` — Placeholder (paper trading, MVP)
-- [ ] **FE-13** `app/auth/login/page.tsx` — Placeholder
-- [ ] **FE-14** `app/auth/signup/page.tsx` — Placeholder with onboarding note
+- [x] **FE-06** `app/page.tsx` — Landing page with product name, tagline, and "→ Open Screener" button
+- [x] **FE-07** `app/screener/page.tsx` — Placeholder: "Screener (coming soon)"
+- [x] **FE-08** `app/mf/page.tsx` — Placeholder: "MF Screener (coming soon)"
+- [x] **FE-09** `app/stock/[symbol]/page.tsx` — Placeholder showing `params.symbol`
+- [x] **FE-10** `app/compare/page.tsx` — Placeholder
+- [x] **FE-11** `app/portfolio/page.tsx` — Placeholder
+- [x] **FE-12** `app/paper-trading/page.tsx` — Placeholder (paper trading, MVP)
+- [x] **FE-13** `app/auth/login/page.tsx` — Placeholder
+- [x] **FE-14** `app/auth/signup/page.tsx` — Placeholder with onboarding note
 
 ### P3.3 — Supabase Client Helpers
 
-- [ ] **FE-15** Create `src/lib/supabase/client.ts`:
+- [x] **FE-15** Create `src/lib/supabase/client.ts`:
   ```typescript
   import { createBrowserClient } from '@supabase/ssr'
 
@@ -502,12 +502,40 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   }
   ```
 
-- [ ] **FE-16** Create `src/lib/supabase/server.ts`:
+- [x] **FE-16** Create `src/lib/supabase/server.ts`:
   ```typescript
   import { createServerClient } from '@supabase/ssr'
   import { cookies } from 'next/headers'
 
-  export function createClient() {
+  export async function createClient() {
+    const cookieStore = await cookies()
+
+    return createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+        },
+      }
+    )
+  }
+  ```
+
+- [x] **FE-17** Create `src/lib/supabase/middleware.ts` — Supabase auth session refresh middleware. Add it to `middleware.ts` at the frontend root so auth cookies are refreshed on every request.
     const cookieStore = cookies()
     return createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -517,19 +545,17 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   }
   ```
 
-- [ ] **FE-17** Create `src/lib/supabase/middleware.ts` — Supabase auth session refresh middleware. Add it to `middleware.ts` at the frontend root so auth cookies are refreshed on every request.
-
 ### P3.4 — Zustand Stores
 
-- [ ] **FE-18** Create `src/store/screenerStore.ts` with full `ScreenerState` interface as defined in Phase 0 assumptions. Key method: `mergeFilters` — takes a partial filter object and merges it into current state (used by the AI chat panel to update filters without resetting manual ones).
+- [x] **FE-18** Create `src/store/screenerStore.ts` with full `ScreenerState` interface as defined in Phase 0 assumptions. Key method: `mergeFilters` — takes a partial filter object and merges it into current state (used by the AI chat panel to update filters without resetting manual ones).
 
-- [ ] **FE-19** Create `src/store/chatStore.ts` with full `ChatState` interface. The `sendQuery` action must: (1) add the user message, (2) set `isAIThinking = true`, (3) POST to `/api/ai/parse-query`, (4) call `screenerStore.mergeFilters` with the result, (5) add the assistant's `filter_applied` message.
+- [x] **FE-19** Create `src/store/chatStore.ts` with full `ChatState` interface. The `sendQuery` action must: (1) add the user message, (2) set `isAIThinking = true`, (3) POST to `/api/ai/parse-query`, (4) call `screenerStore.mergeFilters` with the result, (5) add the assistant's `filter_applied` message.
 
-- [ ] **FE-20** Create `src/store/userStore.ts` with user auth state and investment style.
+- [x] **FE-20** Create `src/store/userStore.ts` with user auth state and investment style.
 
 ### P3.5 — Type Definitions
 
-- [ ] **FE-21** Create `src/types/index.ts` with shared TypeScript interfaces:
+- [x] **FE-21** Create `src/types/index.ts` with shared TypeScript interfaces:
   ```typescript
   export interface Stock { id: string; symbol: string; name: string; sector: string; market_cap_cr: number; /* ... */ }
   export interface StockFundamentals { pe: number; pb: number; roe: number; roce: number; debt_to_equity: number; net_margin: number; dividend_yield: number; graham_number: number; }
