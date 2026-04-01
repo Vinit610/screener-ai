@@ -566,7 +566,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P3.6 — Vercel Deployment
 
-- [ ] **FE-22** Add environment variables to Vercel project settings:
+- [x] **FE-22** Add environment variables to Vercel project settings:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `NEXT_PUBLIC_BACKEND_URL` (Railway URL from BE-15)
@@ -581,7 +581,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P4.1 — Pipeline Scaffolding
 
-- [ ] **PIPE-01** Create `pipeline/requirements.txt`:
+- [x] **PIPE-01** Create `pipeline/requirements.txt`:
   ```
   yfinance==0.2.37
   pandas==2.2.0
@@ -593,9 +593,9 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   numpy==1.26.4
   ```
 
-- [ ] **PIPE-02** Create `pipeline/config.py` — reads all env vars using `os.environ`. Clear error message if any required var is missing.
+- [x] **PIPE-02** Create `pipeline/config.py` — reads all env vars using `os.environ`. Clear error message if any required var is missing.
 
-- [ ] **PIPE-03** Create `pipeline/db.py` — Supabase service-role client. Expose helper functions:
+- [x] **PIPE-03** Create `pipeline/db.py` — Supabase service-role client. Expose helper functions:
   - `upsert_stocks(records: list[dict])` — upsert into `stocks` on conflict `symbol`
   - `upsert_fundamentals(records: list[dict])` — upsert into `stock_fundamentals` on conflict `stock_id`
   - `upsert_prices(records: list[dict])` — upsert into `stock_prices` on conflict `(stock_id, date)`
@@ -603,12 +603,12 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   - `upsert_news(records: list[dict])` — upsert into `news` on conflict `url`
   - `get_stock_id(symbol: str) -> str | None` — look up stock UUID by symbol
 
-- [ ] **PIPE-04** Create `pipeline/data_processor.py` — shared data cleaning utilities:
+- [x] **PIPE-04** Create `pipeline/data_processor.py` — shared data cleaning utilities:
   - `parse_float(val) -> float | None` — safely cast to float, return None on failure
   - `clean_symbol(sym: str) -> str` — strip `.NS` / `.BO` suffix, uppercase
   - `format_market_cap_category(market_cap_cr: float) -> str` — return `"large"/"mid"/"small"/"micro"` based on INR crore thresholds (>20,000 / 5,000–20,000 / 500–5,000 / <500)
 
-- [ ] **PIPE-05** Create `pipeline/nifty500.txt` — one NSE symbol per line **with** `.NS` suffix, e.g.:
+- [x] **PIPE-05** Create `pipeline/nifty500.txt` — one NSE symbol per line **with** `.NS` suffix, e.g.:
   ```
   RELIANCE.NS
   INFY.NS
@@ -620,7 +620,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P4.2 — Stock Price Ingestion (`fetch_prices.py`)
 
-- [ ] **PIPE-06** 🔑 Create `pipeline/fetch_prices.py`:
+- [x] **PIPE-06** 🔑 Create `pipeline/fetch_prices.py`:
 
   **Logic:**
   1. Load symbols from `nifty500.txt`
@@ -631,7 +631,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
   **Error handling:** If a symbol fails (delisted, bad data), log and continue — never crash the whole run.
 
-- [ ] **PIPE-07** Test `fetch_prices.py` locally with a subset of 10 symbols:
+- [x] **PIPE-07** Test `fetch_prices.py` locally with a subset of 10 symbols:
   ```bash
   cd pipeline
   python fetch_prices.py --symbols RELIANCE.NS,INFY.NS,TCS.NS,HDFCBANK.NS,ASIANPAINT.NS
@@ -640,7 +640,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P4.3 — Mutual Fund NAV Ingestion (`fetch_mf_navs.py`)
 
-- [ ] **PIPE-08** 🔑 Create `pipeline/fetch_mf_navs.py`:
+- [x] **PIPE-08** 🔑 Create `pipeline/fetch_mf_navs.py`:
 
   **Logic:**
   1. `GET https://www.amfiindia.com/spages/NAVAll.txt`
@@ -650,11 +650,11 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   5. Upsert today's NAV into `mf_navs` for each fund.
   6. Log: funds processed, NAVs upserted.
 
-- [ ] **PIPE-09** Test `fetch_mf_navs.py` locally. Verify `mutual_funds` and `mf_navs` tables are populated.
+- [x] **PIPE-09** Test `fetch_mf_navs.py` locally. Verify `mutual_funds` and `mf_navs` tables are populated.
 
 ### P4.4 — News Ingestion & Sentiment (`fetch_news.py`)
 
-- [ ] **PIPE-10** Create `pipeline/fetch_news.py`:
+- [x] **PIPE-10** Create `pipeline/fetch_news.py`:
 
   **RSS feeds to parse:**
   ```python
@@ -672,13 +672,13 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   4. Parse JSON response. Upsert into `news` table with `sentiment`, `sentiment_score`, `related_symbols`.
   5. Rate limit: `asyncio.sleep(4)` between Gemini batches (15 RPM limit on free tier).
 
-- [ ] **PIPE-11** Add `feedparser` to `pipeline/requirements.txt`.
+- [x] **PIPE-11** Add `feedparser` to `pipeline/requirements.txt`.
 
-- [ ] **PIPE-12** Test `fetch_news.py` locally. Verify articles appear in `news` table with sentiment scores. Spot-check 5 articles for sentiment accuracy.
+- [x] **PIPE-12** Test `fetch_news.py` locally. Verify articles appear in `news` table with sentiment scores. Spot-check 5 articles for sentiment accuracy.
 
 ### P4.5 — Fundamentals Scraper (`fetch_fundamentals.py`)
 
-- [ ] **PIPE-13** 🔑 Create `pipeline/fetch_fundamentals.py` — Screener.in scraper for Tier 1 stocks (Nifty 500).
+- [x] **PIPE-13** 🔑 Create `pipeline/fetch_fundamentals.py` — Screener.in scraper for Tier 1 stocks (Nifty 500).
 
   **Logic:**
   1. Read Nifty 500 symbols from `nifty500.txt`. Strip `.NS` suffix.
@@ -699,11 +699,11 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   }
   ```
 
-- [ ] **PIPE-14** Test `fetch_fundamentals.py` locally with 5 symbols. Verify fundamentals appear in `stock_fundamentals` with correct values.
+- [x] **PIPE-14** Test `fetch_fundamentals.py` locally with 5 symbols. Verify fundamentals appear in `stock_fundamentals` with correct values.
 
 ### P4.6 — GitHub Actions Cron Workflows
 
-- [ ] **PIPE-15** Create `.github/workflows/daily_pipeline.yml`:
+- [x] **PIPE-15** Create `.github/workflows/daily_pipeline.yml`:
   ```yaml
   name: Daily Data Pipeline
   on:
@@ -727,7 +727,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   ```
 
-- [ ] **PIPE-16** Create `.github/workflows/weekly_fundamentals.yml`:
+- [x] **PIPE-16** Create `.github/workflows/weekly_fundamentals.yml`:
   ```yaml
   name: Weekly Fundamentals Scrape
   on:

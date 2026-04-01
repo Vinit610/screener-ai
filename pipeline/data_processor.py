@@ -9,6 +9,10 @@ def parse_float(val) -> Optional[float]:
     except (ValueError, TypeError):
         return None
 
+def clean_symbol(sym: str) -> str:
+    """Strip .NS / .BO suffix, uppercase."""
+    return sym.replace('.NS', '').replace('.BO', '').upper()
+
 def format_market_cap_category(market_cap_cr: float) -> str:
     """Return 'large'/'mid'/'small'/'micro' based on INR crore thresholds."""
     if market_cap_cr > 20000:

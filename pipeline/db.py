@@ -17,33 +17,31 @@ def upsert_stock_prices(records: List[Dict]) -> None:
         return
     supabase.table('stock_prices').upsert(records, on_conflict='symbol,date').execute()
 
-def upsert_stock_fundamentals(records: List[Dict]) -> None:
-    """Upsert stock fundamentals into the stock_fundamentals table on conflict symbol."""
+def upsert_fundamentals(records: List[Dict]) -> None:
+    """Upsert stock fundamentals into the stock_fundamentals table on conflict stock_id."""
     if not records:
         return
-    supabase.table('stock_fundamentals').upsert(records, on_conflict='symbol').execute()
+    supabase.table('stock_fundamentals').upsert(records, on_conflict='stock_id').execute()
 
-def upsert_mutual_funds(records: List[Dict]) -> None:
+def upsert_prices(records: List[Dict]) -> None:
+    """Upsert stock prices into the stock_prices table on conflict (stock_id, date)."""
+    if not records:
+        return
+    supabase.table('stock_prices').upsert(records, on_conflict='stock_id,date').execute()
+
+def upsert_navs(records: List[Dict]) -> None:
+    """Upsert MF NAVs into the mf_navs table on conflict (fund_id, date)."""
+    if not records:
+        return
+    supabase.table('mf_navs').upsert(records, on_conflict='fund_id,date').execute()
+
+def upsert_funds(records: List[Dict]) -> None:
     """Upsert mutual funds into the mutual_funds table on conflict scheme_code."""
     if not records:
         return
     supabase.table('mutual_funds').upsert(records, on_conflict='scheme_code').execute()
 
-def upsert_mf_navs(records: List[Dict]) -> None:
-    """Upsert MF NAVs into the mf_navs table on conflict (scheme_code, date)."""
-    if not records:
-        return
-    supabase.table('mf_navs').upsert(records, on_conflict='scheme_code,date').execute()
-
-def upsert_news(records: List[Dict]) -> None:
-    """Upsert news into the news table on conflict url."""
-    if not records:
-        return
-    supabase.table('news').upsert(records, on_conflict='url').execute()
-
-def get_stock_id(symbol: str) -> Optional[str]:
-    """Look up stock UUID by symbol."""
-    response = supabase.table('stocks').select('id').eq('symbol', symbol).execute()
-    if response.data:
-        return response.data[0]['id']
-    return None
+def get_existing_news_urls() -> set:
+    """Get set of existing news URLs."""
+    response = supabase.table('news').select('url').execute()
+    return {row['url'] for row in response.data}

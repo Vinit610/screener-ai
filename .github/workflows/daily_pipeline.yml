@@ -1,0 +1,20 @@
+name: Daily Data Pipeline
+on:
+  schedule:
+    - cron: '0 10 * * 1-5'    # 3:30 PM IST = 10:00 UTC, Mon–Fri only
+  workflow_dispatch:             # Allow manual trigger from GitHub UI
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -r pipeline/requirements.txt
+      - run: python pipeline/fetch_prices.py
+      - run: python pipeline/fetch_mf_navs.py
+      - run: python pipeline/fetch_news.py
+    env:
+      PIPELINE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      PIPELINE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

@@ -1,0 +1,17 @@
+name: Weekly Fundamentals Scrape
+on:
+  schedule:
+    - cron: '30 20 * * 0'    # Sunday 2:00 AM IST = Sunday 20:30 UTC
+  workflow_dispatch:
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -r pipeline/requirements.txt
+      - run: python pipeline/fetch_fundamentals.py
+    env:
+      PIPELINE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      PIPELINE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
