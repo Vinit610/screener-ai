@@ -54,7 +54,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const auth = supabase.auth as any
+  const { data: { session } } = await auth.getSession()
 
   if (
     !session?.user &&

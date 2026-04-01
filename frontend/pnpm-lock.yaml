@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@supabase/ssr':
-        specifier: ^0.5.1
+        specifier: ^0.5.2
         version: 0.5.2(@supabase/supabase-js@2.101.1)
       '@supabase/supabase-js':
         specifier: ^2.45.4
