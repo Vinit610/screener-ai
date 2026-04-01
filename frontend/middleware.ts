@@ -54,10 +54,10 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
 
   if (
-    !user &&
+    !session?.user &&
     !request.nextUrl.pathname.startsWith('/auth/login') &&
     !request.nextUrl.pathname.startsWith('/auth/signup')
   ) {
