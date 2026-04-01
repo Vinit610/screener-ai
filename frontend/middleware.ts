@@ -56,18 +56,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const auth = supabase.auth as any
-  const { data: { session } } = await auth.getSession()
+  // Temporarily disable auth check to isolate the __dirname error
+  // const auth = supabase.auth as any
+  // const { data: { session } } = await auth.getSession()
 
-  if (
-    !session?.user &&
-    !request.nextUrl.pathname.startsWith('/auth/login') &&
-    !request.nextUrl.pathname.startsWith('/auth/signup')
-  ) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
-  }
+  // if (
+  //   !session?.user &&
+  //   !request.nextUrl.pathname.startsWith('/auth/login') &&
+  //   !request.nextUrl.pathname.startsWith('/auth/signup')
+  // ) {
+  //   const url = request.nextUrl.clone()
+  //   url.pathname = '/auth/login'
+  //   return NextResponse.redirect(url)
+  // }
 
   return response
 }
