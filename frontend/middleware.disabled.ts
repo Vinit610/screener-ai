@@ -1,4 +1,3 @@
-// import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -70,8 +69,6 @@ export async function middleware(request: NextRequest) {
   // //   url.pathname = '/auth/login'
   // //   return NextResponse.redirect(url)
   // // }
-
-  // return response
 
   return NextResponse.next()
 }
