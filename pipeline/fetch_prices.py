@@ -1,5 +1,6 @@
 import os
 
+import requests
 import yfinance as yf
 import pandas as pd
 from typing import List, Dict, Optional
@@ -23,6 +24,10 @@ def load_symbols(file_path: str = 'nifty500.txt') -> List[str]:
 def get_stock_info(symbol: str) -> Dict:
     """Get stock info from yfinance."""
     try:
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
         ticker = yf.Ticker(symbol)
         info = ticker.info
         return {
@@ -65,6 +70,10 @@ def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50) -
         logger.info(f"Processing batch {i//batch_size + 1}: {batch[:3]}...")
 
         try:
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
             data = yf.download(batch, period=period, group_by='ticker', auto_adjust=True)
             if data.empty:
                 logger.warning(f"No data for batch: {batch}")
