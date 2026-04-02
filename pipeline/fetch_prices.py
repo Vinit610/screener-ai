@@ -163,7 +163,7 @@ def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, i
                             'low': row.get('Low'),
                             'close': row.get('Close'),
                             'volume': row.get('Volume'),
-                            'adj_close': row.get('Adj Close')
+                            # 'adj_close': row.get('Adj Close')
                         })
                 except Exception as e:
                     logger.error(f"Error processing symbol {sym}: {e}")

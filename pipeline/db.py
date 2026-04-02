@@ -11,12 +11,6 @@ def upsert_stocks(records: List[Dict]) -> None:
         return
     supabase.table('stocks').upsert(records, on_conflict='symbol').execute()
 
-def upsert_stock_prices(records: List[Dict]) -> None:
-    """Upsert stock prices into the stock_prices table on conflict (symbol, date)."""
-    if not records:
-        return
-    supabase.table('stock_prices').upsert(records, on_conflict='symbol,date').execute()
-
 def upsert_fundamentals(records: List[Dict]) -> None:
     """Upsert stock fundamentals into the stock_fundamentals table on conflict stock_id."""
     if not records:

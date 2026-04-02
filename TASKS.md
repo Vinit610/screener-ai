@@ -748,7 +748,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
   ```
 
-- [ ] **PIPE-17** Add all pipeline secrets to GitHub repository Settings → Secrets → Actions:
+- [x] **PIPE-17** Add all pipeline secrets to GitHub repository Settings → Secrets → Actions:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `GEMINI_API_KEY`

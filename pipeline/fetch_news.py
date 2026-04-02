@@ -76,10 +76,10 @@ async def fetch_news() -> None:
                 if url in existing_urls:
                     continue
                 article = {
-                    'title': entry.title,
+                    'headline': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': url,
-                    'published': getattr(entry, 'published', None)
+                    'published_at': getattr(entry, 'published', None)
                 }
                 all_articles.append(article)
         except Exception as e:

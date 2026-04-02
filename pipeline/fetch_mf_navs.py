@@ -59,13 +59,12 @@ def fetch_mf_navs() -> None:
     logger.info(f"Found {len(growth_plans)} growth plan NAVs")
 
     # Extract unique funds
-    funds = growth_plans[['scheme_code', 'isin_growth', 'scheme_name']].drop_duplicates()
+    funds = growth_plans[['scheme_code', 'scheme_name']].drop_duplicates()
     fund_records = []
     for _, row in funds.iterrows():
         fund_records.append({
             'scheme_code': row['scheme_code'],
-            'isin': row['isin_growth'],
-            'name': row['scheme_name'],
+            'scheme_name': row['scheme_name'],
             'fund_house': extract_fund_house(row['scheme_name']),
             'is_active': True
         })

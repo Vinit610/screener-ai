@@ -49,8 +49,7 @@ def scrape_fundamentals(symbol: str) -> Optional[Dict]:
             'roe': ratios.get('return_on_equity'),
             'roce': ratios.get('return_on_capital_employed'),
             'debt_to_equity': ratios.get('total_debt_to_equity'),
-            'net_margin': ratios.get('net_margin'),
-            'source': 'screener'
+            'net_margin': ratios.get('net_margin')
         }
     except requests.HTTPError as e:
         if e.response.status_code == 429:
