@@ -1,3 +1,5 @@
+import os
+
 import yfinance as yf
 import pandas as pd
 from typing import List, Dict, Optional
@@ -11,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 def load_symbols(file_path: str = 'nifty500.txt') -> List[str]:
     """Load symbols from file, one per line."""
+    # Get the directory where the current script (fetch_prices.py) is located
+    base_path = os.path.dirname(__file__)
+    # Join it with the filename to get the absolute path
+    file_path = os.path.join(base_path, file_path)
     with open(file_path, 'r') as f:
         return [line.strip() for line in f if line.strip()]
 
