@@ -45,6 +45,14 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
             })
             ticker = yf.Ticker(symbol, session=session)
             info = ticker.info
+            # Convert market cap from USD to INR crores (approximate)
+            market_cap_raw = info.get('marketCap', None)
+            market_cap_cr = None
+            if market_cap_raw:
+                # Rough conversion: 1 INR = 0.012 USD, so multiply by ~83 to get INR
+                market_cap_inr = market_cap_raw * 83
+                market_cap_cr = market_cap_inr / 10_000_000  # Convert to crores
+            
             return {
                 'symbol': clean_symbol(symbol),
                 'exchange': 'NSE',
@@ -52,7 +60,7 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 'name': info.get('shortName', ''),
                 'sector': info.get('sector', ''),
                 'industry': info.get('industry', ''),
-                'market_cap': info.get('marketCap', None)
+                'market_cap_cr': market_cap_cr
             }
         except Exception as e:
             retry_count += 1
@@ -80,7 +88,7 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                     'name': '',
                     'sector': '',
                     'industry': '',
-                    'market_cap': None
+                    'market_cap_cr': None
                 }
 
 def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, info_chunk_size: int = 10) -> None:
