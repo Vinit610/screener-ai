@@ -1,4 +1,6 @@
 name: Daily Data Pipeline
+env:
+  PIPELINE_SUPABASE_URL: ${{ secrets.PIPELINE_SUPABASE_URL }}
 on:
   schedule:
     - cron: '0 10 * * 1-5'    # 3:30 PM IST = 10:00 UTC, Mon–Fri only
