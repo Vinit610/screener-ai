@@ -41,6 +41,34 @@ def upsert_funds(records: List[Dict]) -> None:
         return
     supabase.table('mutual_funds').upsert(records, on_conflict='scheme_code').execute()
 
+def get_stock_id(symbol: str) -> Optional[str]:
+    """Look up stock UUID by symbol."""
+    try:
+        response = supabase.table('stocks').select('id').eq('symbol', symbol).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]['id']
+    except Exception as e:
+        logger = __import__('logging').getLogger(__name__)
+        logger.error(f"Failed to get stock_id for {symbol}: {e}")
+    return None
+
+def get_fund_id(scheme_code: str) -> Optional[str]:
+    """Look up mutual fund UUID by scheme code."""
+    try:
+        response = supabase.table('mutual_funds').select('id').eq('scheme_code', scheme_code).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]['id']
+    except Exception as e:
+        logger = __import__('logging').getLogger(__name__)
+        logger.error(f"Failed to get fund_id for {scheme_code}: {e}")
+    return None
+
+def upsert_news(records: List[Dict]) -> None:
+    """Upsert news articles into the news table on conflict url."""
+    if not records:
+        return
+    supabase.table('news').upsert(records, on_conflict='url').execute()
+
 def get_existing_news_urls() -> set:
     """Get set of existing news URLs."""
     response = supabase.table('news').select('url').execute()

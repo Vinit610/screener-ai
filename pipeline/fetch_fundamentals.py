@@ -74,7 +74,7 @@ def fetch_fundamentals(symbols: list = None) -> None:
     for i, symbol in enumerate(symbols):
         logger.info(f"Processing {symbol} ({i+1}/{len(symbols)})")
 
-        stock_id = get_stock_id(symbol + '.NS')  # Assuming .NS
+        stock_id = get_stock_id(symbol)  # symbol is already cleaned
         if not stock_id:
             logger.warning(f"No stock_id for {symbol}")
             continue
