@@ -1,6 +1,4 @@
 name: Weekly Fundamentals Scrape
-env:
-  PIPELINE_SUPABASE_URL: ${{ secrets.PIPELINE_SUPABASE_URL }}
 on:
   schedule:
     - cron: '30 20 * * 0'    # Sunday 2:00 AM IST = Sunday 20:30 UTC
