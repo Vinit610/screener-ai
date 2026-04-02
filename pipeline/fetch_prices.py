@@ -9,6 +9,7 @@ import logging
 from db import upsert_stocks, upsert_prices, get_stock_id
 from data_processor import clean_symbol
 import argparse
+from curl_cffi import requests
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -39,10 +40,7 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
     retry_count = 0
     while retry_count < MAX_RETRIES:
         try:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            })
+            session = requests.Session(impersonate="chrome")
             ticker = yf.Ticker(symbol, session=session)
             info = ticker.info
             # Convert market cap from USD to INR crores (approximate)
