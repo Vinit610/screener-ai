@@ -1069,27 +1069,27 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P8.2 — Auth Pages
 
-- [ ] **AUTH-03** Build `app/auth/login/page.tsx`:
+- [x] **AUTH-03** Build `app/auth/login/page.tsx`:
   - "Sign in with Google" button (uses Supabase `signInWithOAuth`)
   - Email + Password form (uses Supabase `signInWithPassword`)
   - Link to signup page
   - Dark mode styled
 
-- [ ] **AUTH-04** Build `app/auth/signup/page.tsx`:
+- [x] **AUTH-04** Build `app/auth/signup/page.tsx`:
   - Email + Password form (uses Supabase `signUp`)
   - After successful signup, redirect to the onboarding flow
 
-- [ ] **AUTH-05** Build `app/auth/callback/route.ts` — Next.js API route that handles Supabase OAuth callback, exchanges code for session, redirects to `/onboarding` or `/screener`.
+- [x] **AUTH-05** Build `app/auth/callback/route.ts` — Next.js API route that handles Supabase OAuth callback, exchanges code for session, redirects to `/onboarding` or `/screener`.
 
 ### P8.3 — Onboarding Flow
 
-- [ ] **AUTH-06** Build `app/onboarding/page.tsx` — investment style selector:
+- [x] **AUTH-06** Build `app/onboarding/page.tsx` — investment style selector:
   - Three large cards: **Value Investor**, **Growth Investor**, **Dividend Investor**
   - Each card shows: style name, description (2 lines), example: "Prefers low PE, high ROE, strong balance sheets"
   - User clicks one → POST `/api/auth/onboarding` → `userStore.setInvestmentStyle()` → redirect to `/screener`
   - Cannot be skipped (redirect back to onboarding if `onboarding_done=false`)
 
-- [ ] **AUTH-07** Implement `POST /api/auth/onboarding` in `backend/routers/auth.py`:
+- [x] **AUTH-07** Implement `POST /api/auth/onboarding` in `backend/routers/auth.py`:
   ```python
   class OnboardingRequest(BaseModel):
       investment_style: Literal["value", "growth", "dividend"]
@@ -1103,25 +1103,25 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
       return {"status": "ok"}
   ```
 
-- [ ] **AUTH-08** Create `backend/dependencies/auth.py` — `get_current_user` dependency that:
+- [x] **AUTH-08** Create `backend/dependencies/auth.py` — `get_current_user` dependency that:
   - Reads `Authorization: Bearer <token>` header
   - Verifies JWT with Supabase
   - Returns `user_id` or raises `HTTPException(401)`
 
 ### P8.4 — Auth State in Frontend
 
-- [ ] **AUTH-09** Create `src/components/auth/AuthProvider.tsx` — wraps the app, initializes Supabase auth listener, syncs user to `userStore`.
+- [x] **AUTH-09** Create `src/components/auth/AuthProvider.tsx` — wraps the app, initializes Supabase auth listener, syncs user to `userStore`.
 
-- [ ] **AUTH-10** Add `<AuthProvider>` to `app/layout.tsx`.
+- [x] **AUTH-10** Add `<AuthProvider>` to `app/layout.tsx`.
 
-- [ ] **AUTH-11** Create `src/middleware.ts` — protect these routes (redirect to login if unauthenticated):
+- [x] **AUTH-11** Create `src/middleware.ts` — protect these routes (redirect to login if unauthenticated):
   - `/portfolio`
   - `/paper-trading`
   - `/onboarding`
 
-- [ ] **AUTH-12** Add auth state UI to the app header: show "Login" button when logged out; show user avatar + "Logout" when logged in. Add an investment style indicator (e.g., "Value" badge in the header).
+- [x] **AUTH-12** Add auth state UI to the app header: show "Login" button when logged out; show user avatar + "Logout" when logged in. Add an investment style indicator (e.g., "Value" badge in the header).
 
-- [ ] **AUTH-13** Gate AI features in `StockCard`: pass `isAuthenticated` as a prop. If false, replace the AI explanation with: `"Log in to see AI insights personalised to your investing style →"` (clickable, goes to login).
+- [x] **AUTH-13** Gate AI features in `StockCard`: pass `isAuthenticated` as a prop. If false, replace the AI explanation with: `"Log in to see AI insights personalised to your investing style →"` (clickable, goes to login).
 
 ---
 
@@ -1129,27 +1129,27 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 > **Goal:** `/stock/[symbol]` shows full stock data, AI explanation, price chart, and news feed.
 
-- [ ] **STOCK-01** Build `app/stock/[symbol]/page.tsx` as a Server Component:
+- [x] **STOCK-01** Build `app/stock/[symbol]/page.tsx` as a Server Component:
   - Server-side fetch `GET /api/stocks/{symbol}` using `fetch` with `{ next: { revalidate: 1800 } }` (ISR, 30-min cache)
   - Pass data as props to client components
 
-- [ ] **STOCK-02** Create `src/components/stock/FundamentalsGrid.tsx` — displays all key metrics in a responsive 3-column grid: PE, PB, ROE, ROCE, D/E, Net Margin, Revenue, Net Profit, EPS, Book Value, Graham Number, Dividend Yield. Each cell has a label, value, and a small info tooltip explaining the metric.
+- [x] **STOCK-02** Create `src/components/stock/FundamentalsGrid.tsx` — displays all key metrics in a responsive 3-column grid: PE, PB, ROE, ROCE, D/E, Net Margin, Revenue, Net Profit, EPS, Book Value, Graham Number, Dividend Yield. Each cell has a label, value, and a small info tooltip explaining the metric.
 
-- [ ] **STOCK-03** Create `src/components/stock/PriceChart.tsx` using Recharts:
+- [x] **STOCK-03** Create `src/components/stock/PriceChart.tsx` using Recharts:
   - `<AreaChart>` with EOD closing price
   - Time range selector: 1M / 3M / 6M / 1Y / MAX
   - Green fill for positive periods, red fill for negative periods (relative to start)
   - Tooltip showing date + price on hover
 
-- [ ] **STOCK-04** Create `src/components/stock/NewsFeed.tsx`:
+- [x] **STOCK-04** Create `src/components/stock/NewsFeed.tsx`:
   - Fetches `GET /api/stocks/{symbol}/news` client-side
   - Each article shows: headline, source, published date, `<SentimentBadge />`, link to original
   - Sorted by `published_at DESC`
   - Empty state: "No recent news found"
 
-- [ ] **STOCK-05** Wire `StockCard` with `variant="detail"` at the top of the stock detail page. This triggers the SSE AI explanation stream as soon as the page mounts (if user is logged in).
+- [x] **STOCK-05** Wire `StockCard` with `variant="detail"` at the top of the stock detail page. This triggers the SSE AI explanation stream as soon as the page mounts (if user is logged in).
 
-- [ ] **STOCK-06** Add an "Open in Screener" button that pre-fills the screener with filters matching this stock's sector and market cap category.
+- [x] **STOCK-06** Add an "Open in Screener" button that pre-fills the screener with filters matching this stock's sector and market cap category.
 
 ---
 
@@ -1159,21 +1159,21 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P10.1 — MF Screener UI
 
-- [ ] **MF-01** Create `src/components/mf/MFCard.tsx` — MF card showing: scheme name, fund house, category, expense ratio, AUM, 1Y/3Y returns, Sharpe ratio. Include an AI explanation area (same streaming pattern as `StockCard`).
+- [x] **MF-01** Create `src/components/mf/MFCard.tsx` — MF card showing: scheme name, fund house, category, expense ratio, AUM, 1Y/3Y returns, Sharpe ratio. Include an AI explanation area (same streaming pattern as `StockCard`).
 
-- [ ] **MF-02** Create `src/components/mf/MFFilterPanel.tsx` — filter controls: category, fund house, max expense ratio, min AUM, direct/regular toggle.
+- [x] **MF-02** Create `src/components/mf/MFFilterPanel.tsx` — filter controls: category, fund house, max expense ratio, min AUM, direct/regular toggle.
 
-- [ ] **MF-03** Build `app/mf/page.tsx` with the MF screener: `MFFilterPanel` on left, list of `MFCard` results on right. No two-panel chat for MF screener in MVP.
+- [x] **MF-03** Build `app/mf/page.tsx` with the MF screener: `MFFilterPanel` on left, list of `MFCard` results on right. No two-panel chat for MF screener in MVP.
 
 ### P10.2 — Comparison Tool
 
-- [ ] **MF-04** Build `app/compare/page.tsx` — search inputs for two instruments (stock or MF). A dropdown lets users pick: "Stock vs Stock", "MF vs MF".
+- [x] **MF-04** Build `app/compare/page.tsx` — search inputs for two instruments (stock or MF). A dropdown lets users pick: "Stock vs Stock", "MF vs MF".
 
-- [ ] **MF-05** Create `src/components/mf/ComparisonTable.tsx` — side-by-side metric table. Each row is a metric (PE, ROE, etc.). "Winner" column highlights the better value in green.
+- [x] **MF-05** Create `src/components/mf/ComparisonTable.tsx` — side-by-side metric table. Each row is a metric (PE, ROE, etc.). "Winner" column highlights the better value in green.
 
-- [ ] **MF-06** Wire comparison narrative: when two instruments are selected, open an SSE connection to `POST /api/ai/compare`. Stream the narrative below the comparison table using `StreamingText`.
+- [x] **MF-06** Wire comparison narrative: when two instruments are selected, open an SSE connection to `POST /api/ai/compare`. Stream the narrative below the comparison table using `StreamingText`.
 
-- [ ] **MF-07** Create `src/components/chat/messages/ComparisonMessage.tsx` — renders a comparison inside the chat panel when the user asks "compare X vs Y".
+- [x] **MF-07** Create `src/components/chat/messages/ComparisonMessage.tsx` — renders a comparison inside the chat panel when the user asks "compare X vs Y".
 
 ---
 

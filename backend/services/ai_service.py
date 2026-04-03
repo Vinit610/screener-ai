@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ── Client setup ─────────────────────────────────────────────────────────────
 
 client = genai.Client(api_key=settings.gemini_api_key)
-MODEL_ID = "gemini-3-flash-preview"
+MODEL_ID = "gemini-2.5-flash"
 
 # ── Prompts ──────────────────────────────────────────────────────────────────
 
