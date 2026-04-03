@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export const runtime = 'nodejs'
 
+// Routes that require authentication
+const PROTECTED_ROUTES = ['/portfolio', '/paper-trading', '/onboarding']
+
+function isProtectedRoute(pathname: string): boolean {
+  return PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -56,16 +63,32 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const auth = supabase.auth as any
-  const { data: { session } } = await auth.getSession()
+  // Refresh session (important for keeping cookies fresh)
+  const { data: { session } } = await (supabase.auth as any).getSession()
 
+  // Only protect specific routes — public pages (screener, stock, home) work without auth
+  if (isProtectedRoute(request.nextUrl.pathname)) {
+    if (!session?.user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/login'
+      url.searchParams.set('next', request.nextUrl.pathname)
+      return NextResponse.redirect(url)
+    }
+
+    // If user is going to onboarding but already done, redirect to screener
+    if (request.nextUrl.pathname.startsWith('/onboarding')) {
+      // We can't check profile here easily, so let the page handle it
+    }
+  }
+
+  // If logged-in user visits auth pages, redirect to screener
   if (
-    !session?.user &&
-    !request.nextUrl.pathname.startsWith('/auth/login') &&
-    !request.nextUrl.pathname.startsWith('/auth/signup')
+    session?.user &&
+    (request.nextUrl.pathname.startsWith('/auth/login') ||
+      request.nextUrl.pathname.startsWith('/auth/signup'))
   ) {
     const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
+    url.pathname = '/screener'
     return NextResponse.redirect(url)
   }
 
@@ -74,13 +97,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

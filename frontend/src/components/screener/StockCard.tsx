@@ -8,6 +8,7 @@ import StreamingText from "@/components/ui/StreamingText";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useStockExplanation } from "@/hooks/useStockExplanation";
 import type { StockCardProps } from "@/types";
+import { useUserStore } from "@/store/userStore";
 
 function fmt(v: number | null | undefined): string {
   if (v == null) return "–";
@@ -24,9 +25,12 @@ function fmtCr(v: number | null | undefined): string {
 export default function StockCard({ stock, variant, showAI }: StockCardProps) {
   const f = stock.fundamentals;
   const [aiEnabled, setAiEnabled] = useState(false);
+  const { user } = useUserStore();
+  const isAuthenticated = !!user;
+  const effectiveShowAI = showAI !== false && isAuthenticated;
   const { explanation, isStreaming, error: aiError } = useStockExplanation(
     stock.symbol,
-    aiEnabled && showAI !== false,
+    aiEnabled && effectiveShowAI,
   );
 
   const pe = f?.pe ?? stock.pe ?? null;
@@ -97,10 +101,10 @@ export default function StockCard({ stock, variant, showAI }: StockCardProps) {
       {/* AI explanation */}
       {!isCompact && (
         <div className="mt-3 rounded bg-background/50 p-2 text-xs text-muted">
-          {showAI === false ? (
+          {!isAuthenticated ? (
             <p className="italic">
               <a href="/auth/login" className="text-primary hover:underline">
-                Login to see AI insights &rarr;
+                Log in to see AI insights personalised to your investing style &rarr;
               </a>
             </p>
           ) : !aiEnabled ? (
