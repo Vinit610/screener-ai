@@ -52,6 +52,7 @@ def scrape_fundamentals(symbol: str) -> Optional[Dict]:
         soup = BeautifulSoup(response.text, 'html.parser')
 
         result = {}
+        current_price = None
 
         # ── 1. Parse top-ratios section ──
         # Screener.in uses <li> with <span class="name"> and <span class="number">
@@ -64,7 +65,12 @@ def scrape_fundamentals(symbol: str) -> Optional[Dict]:
                     continue
                 name = name_span.get_text(strip=True).lower()
                 value_text = number_span.get_text(strip=True)
-                
+
+                # Capture current price for P/B calculation
+                if 'current price' in name:
+                    current_price = parse_ratio_value(value_text)
+                    continue
+
                 # Map to DB field
                 db_key = None
                 for pattern, key in RATIO_KEY_MAP.items():
@@ -75,33 +81,32 @@ def scrape_fundamentals(symbol: str) -> Optional[Dict]:
                 if db_key:
                     result[db_key] = parse_ratio_value(value_text)
 
-        # ── 2. Parse key financial data from the "Profit & Loss" / financials sections ──
-        # Look for the quarterly/annual results sections
-        sections = soup.find_all('section')
-        for section in sections:
-            heading = section.find(['h2', 'h3'])
-            if not heading:
-                continue
-            heading_text = heading.get_text(strip=True).lower()
+        # ── 2. Parse Profit & Loss section ──
+        pl_section = soup.find('section', id='profit-loss')
+        if pl_section:
+            table = pl_section.find('table')
+            if table:
+                _parse_pl_table(table, result)
 
-            # Profit & Loss section — extract revenue, net profit, EPS, operating margin
-            if 'profit' in heading_text and 'loss' in heading_text:
-                table = section.find('table')
-                if table:
-                    _parse_pl_table(table, result)
+        # ── 3. Parse Balance Sheet section ──
+        bs_section = soup.find('section', id='balance-sheet')
+        if bs_section:
+            table = bs_section.find('table')
+            if table:
+                _parse_balance_sheet(table, result)
 
-            # Balance Sheet — extract debt to equity
-            if 'balance sheet' in heading_text:
-                table = section.find('table')
-                if table:
-                    _parse_balance_sheet(table, result)
-
-        # ── 3. Parse ratios section if there's a dedicated one ──
+        # ── 4. Parse ratios section ──
         ratios_section2 = soup.find('section', id='ratios')
         if ratios_section2:
             table = ratios_section2.find('table')
             if table:
                 _parse_ratios_table(table, result)
+
+        # ── 5. Compute derived ratios ──
+        if current_price and result.get('book_value') and result['book_value'] > 0:
+            result['pb'] = round(current_price / result['book_value'], 2)
+        if result.get('net_profit_cr') and result.get('revenue_cr') and result['revenue_cr'] > 0:
+            result.setdefault('net_margin', round(result['net_profit_cr'] / result['revenue_cr'] * 100, 2))
 
         if not result:
             logger.warning(f"No fundamentals extracted for {symbol}")
@@ -154,20 +159,17 @@ def _parse_pl_table(table, result: Dict) -> None:
             val = _get_last_annual_value(cells)
             if val is not None:
                 result['eps'] = val
-        elif 'opm' in label or 'operating profit margin' in label:
+        elif 'opm' in label or 'operating profit margin' in label or 'financing margin' in label:
             val = _get_last_annual_value(cells)
             if val is not None:
                 result['operating_margin'] = val
-        elif 'net profit margin' in label or label == 'npm':
-            val = _get_last_annual_value(cells)
-            if val is not None:
-                result['net_margin'] = val
 
 
 def _parse_balance_sheet(table, result: Dict) -> None:
     """Extract debt-to-equity from balance sheet table."""
     total_debt = None
-    shareholders_equity = None
+    equity_capital = None
+    reserves = None
     for row in table.find_all('tr'):
         cells = row.find_all(['td', 'th'])
         if len(cells) < 2:
@@ -177,12 +179,17 @@ def _parse_balance_sheet(table, result: Dict) -> None:
             val = _get_last_annual_value(cells)
             if val is not None:
                 total_debt = (total_debt or 0) + val
-        elif 'equity' in label and 'share' not in label:
+        elif label.startswith('equity capital') or label.startswith('share capital'):
             val = _get_last_annual_value(cells)
             if val is not None:
-                shareholders_equity = val
+                equity_capital = val
+        elif label.startswith('reserves'):
+            val = _get_last_annual_value(cells)
+            if val is not None:
+                reserves = val
 
-    if total_debt is not None and shareholders_equity and shareholders_equity > 0:
+    shareholders_equity = (equity_capital or 0) + (reserves or 0)
+    if total_debt is not None and shareholders_equity > 0:
         if 'debt_to_equity' not in result:
             result['debt_to_equity'] = round(total_debt / shareholders_equity, 2)
 
@@ -232,6 +239,10 @@ def fetch_fundamentals(symbols: list = None) -> None:
 
         fundamentals = scrape_fundamentals(symbol)
         if fundamentals:
+            # Guard: eps and book_value must both be positive for graham_number SQRT
+            for key in ('eps', 'book_value'):
+                if fundamentals.get(key) is not None and fundamentals[key] < 0:
+                    fundamentals[key] = None
             record = {'stock_id': stock_id, **fundamentals}
             upsert_fundamentals([record])
             logger.info(f"Upserted fundamentals for {symbol}")

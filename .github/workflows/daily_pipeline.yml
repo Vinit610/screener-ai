@@ -13,6 +13,7 @@ jobs:
       - run: pip install -r pipeline/requirements.txt
       - run: python pipeline/fetch_prices.py
       - run: python pipeline/fetch_mf_navs.py
+      - run: python pipeline/fetch_mf_details.py
       - run: python pipeline/fetch_news.py
     env:
       PIPELINE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
