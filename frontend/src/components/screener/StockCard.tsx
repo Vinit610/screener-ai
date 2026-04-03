@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { clsx } from "clsx";
 import Badge from "@/components/ui/Badge";
 import Metric from "@/components/ui/Metric";
+import StreamingText from "@/components/ui/StreamingText";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useStockExplanation } from "@/hooks/useStockExplanation";
 import type { StockCardProps } from "@/types";
 
 function fmt(v: number | null | undefined): string {
@@ -17,8 +21,13 @@ function fmtCr(v: number | null | undefined): string {
   return `₹${v.toFixed(0)} Cr`;
 }
 
-export default function StockCard({ stock, variant }: StockCardProps) {
+export default function StockCard({ stock, variant, showAI }: StockCardProps) {
   const f = stock.fundamentals;
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const { explanation, isStreaming, error: aiError } = useStockExplanation(
+    stock.symbol,
+    aiEnabled && showAI !== false,
+  );
 
   const pe = f?.pe ?? stock.pe ?? null;
   const roe = f?.roe ?? stock.roe ?? null;
@@ -85,10 +94,30 @@ export default function StockCard({ stock, variant }: StockCardProps) {
         </div>
       )}
 
-      {/* AI explanation placeholder — populated in Phase 7 */}
+      {/* AI explanation */}
       {!isCompact && (
-        <div className="mt-3 rounded bg-background/50 p-2 text-xs text-muted italic">
-          AI insight will appear here…
+        <div className="mt-3 rounded bg-background/50 p-2 text-xs text-muted">
+          {showAI === false ? (
+            <p className="italic">
+              <a href="/auth/login" className="text-primary hover:underline">
+                Login to see AI insights &rarr;
+              </a>
+            </p>
+          ) : !aiEnabled ? (
+            <button
+              type="button"
+              onClick={() => setAiEnabled(true)}
+              className="italic text-primary hover:underline"
+            >
+              Show AI insight
+            </button>
+          ) : isStreaming && !explanation ? (
+            <Skeleton className="h-12 w-full" />
+          ) : aiError ? (
+            <p className="italic text-red-400">Could not generate insight.</p>
+          ) : (
+            <StreamingText text={explanation} isStreaming={isStreaming} />
+          )}
         </div>
       )}
 

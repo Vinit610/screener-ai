@@ -223,8 +223,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
-  type?: 'message' | 'filter_applied'
+  type?: 'message' | 'filter_applied' | 'error'
   filters?: Partial<ScreenerFilters>
+  filterCount?: number
+  resultCount?: number
 }
 
 // Error Types

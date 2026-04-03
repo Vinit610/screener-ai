@@ -3,6 +3,7 @@
 import { useState } from "react";
 import FilterPanel from "./FilterPanel";
 import ResultsTable from "./ResultsTable";
+import ChatPanel from "@/components/chat/ChatPanel";
 
 type MobileTab = "screener" | "chat";
 
@@ -26,11 +27,9 @@ export default function ScreenerLayout() {
           </div>
         </div>
 
-        {/* Right panel: Chat placeholder (≈40%) */}
-        <div className="flex flex-col border-l border-border p-4" style={{ flex: "0 0 40%" }}>
-          <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted">
-            Chat panel — coming in Phase 7
-          </div>
+        {/* Right panel: Chat (≈40%) */}
+        <div className="flex flex-col border-l border-border" style={{ flex: "0 0 40%" }}>
+          <ChatPanel />
         </div>
       </div>
 
@@ -45,8 +44,8 @@ export default function ScreenerLayout() {
             </div>
           )}
           {mobileTab === "chat" && (
-            <div className="flex flex-1 items-center justify-center text-sm text-muted">
-              Chat panel — coming in Phase 7
+            <div className="flex flex-1">
+              <ChatPanel />
             </div>
           )}
         </div>

@@ -943,7 +943,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P7.1 — Gemini Client Setup
 
-- [ ] **BE-23** Create `backend/services/ai_service.py` — Gemini Flash client singleton:
+- [x] **BE-23** Create `backend/services/ai_service.py` — Gemini Flash client singleton:
   ```python
   import google.generativeai as genai
   from config import settings
@@ -955,14 +955,14 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P7.2 — NL → Filter Translation
 
-- [ ] **BE-24** 🔑 Implement `parse_natural_language_query(query: str) -> dict` in `ai_service.py`:
+- [x] **BE-24** 🔑 Implement `parse_natural_language_query(query: str) -> dict` in `ai_service.py`:
   - Uses the full `NL_TO_FILTER_PROMPT` from the Design doc (Section 6, Feature 1)
   - Calls Gemini with `generation_config={"response_mime_type": "application/json"}`
   - Returns parsed filter dict
 
-- [ ] **BE-25** Implement `validate_filter_output(raw: dict) -> dict` — strips any keys not in `VALID_FILTER_KEYS`, validates sector against `VALID_SECTORS`, validates `market_cap_category`. Never raises — silently drops invalid keys.
+- [x] **BE-25** Implement `validate_filter_output(raw: dict) -> dict` — strips any keys not in `VALID_FILTER_KEYS`, validates sector against `VALID_SECTORS`, validates `market_cap_category`. Never raises — silently drops invalid keys.
 
-- [ ] **BE-26** Implement `POST /api/ai/parse-query` in `backend/routers/ai.py`:
+- [x] **BE-26** Implement `POST /api/ai/parse-query` in `backend/routers/ai.py`:
   ```python
   class ParseQueryRequest(BaseModel):
       query: str
@@ -979,17 +979,17 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
       return validated
   ```
 
-- [ ] **BE-27** Test NL→filter with 10 different queries (in pytest — see Testing phase). Spot-check that edge cases return `{}` rather than crashing.
+- [x] **BE-27** Test NL→filter with 10 different queries (in pytest — see Testing phase). Spot-check that edge cases return `{}` rather than crashing.
 
 ### P7.3 — Stock Card AI Explanation (SSE Streaming)
 
-- [ ] **BE-28** 🔑 Implement `stream_stock_explanation(symbol, investment_style, fundamentals)` in `ai_service.py`:
+- [x] **BE-28** 🔑 Implement `stream_stock_explanation(symbol, investment_style, fundamentals)` in `ai_service.py`:
   - Uses the three style-specific prompts from Design doc Section 6, Feature 2
   - Streams tokens via `model.generate_content(prompt, stream=True)`
   - Yields `f"data: {json.dumps({'token': chunk.text})}\n\n"` for each chunk
   - Yields `"data: [DONE]\n\n"` at end
 
-- [ ] **BE-29** Implement `POST /api/ai/explain-stock` in `backend/routers/ai.py`:
+- [x] **BE-29** Implement `POST /api/ai/explain-stock` in `backend/routers/ai.py`:
   ```python
   class ExplainRequest(BaseModel):
       symbol: str
@@ -1005,17 +1005,17 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P7.4 — Comparison Narrative (SSE Streaming)
 
-- [ ] **BE-30** Implement `stream_comparison(symbol_a, symbol_b, investment_style)` in `ai_service.py`:
+- [x] **BE-30** Implement `stream_comparison(symbol_a, symbol_b, investment_style)` in `ai_service.py`:
   - Uses `COMPARISON_PROMPT` from Design doc Section 6, Feature 3
   - First yields a `{"type": "structured", "data": {...}}` event with the winner JSON
   - Then yields `{"type": "token", "text": "..."}` events for the narrative
   - Yields `{"type": "done"}` at end
 
-- [ ] **BE-31** Implement `POST /api/ai/compare` in `backend/routers/ai.py` — returns SSE stream from `stream_comparison`.
+- [x] **BE-31** Implement `POST /api/ai/compare` in `backend/routers/ai.py` — returns SSE stream from `stream_comparison`.
 
 ### P7.5 — AI Features in Frontend
 
-- [ ] **FE-38** Create `src/hooks/useStockExplanation.ts`:
+- [x] **FE-38** Create `src/hooks/useStockExplanation.ts`:
   ```typescript
   export function useStockExplanation(symbol: string, enabled: boolean) {
     const [explanation, setExplanation] = useState("")
@@ -1025,34 +1025,34 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   }
   ```
 
-- [ ] **FE-39** Wire `useStockExplanation` into `StockCard.tsx`:
+- [x] **FE-39** Wire `useStockExplanation` into `StockCard.tsx`:
   - When `variant="table-row"` or `"chat-embed"`, use `StreamingText` to show the explanation
   - Show `<Skeleton />` while waiting for first token
   - Show "Login to see AI insights →" if user is not logged in
 
 ### P7.6 — Chat Panel
 
-- [ ] **FE-40** 🔑 Create `src/components/chat/ChatInput.tsx`:
+- [x] **FE-40** 🔑 Create `src/components/chat/ChatInput.tsx`:
   - Text input with "Ask anything about Indian stocks..." placeholder
   - Send button (also triggers on Enter key)
   - Disabled + loading state while AI is thinking
   - Character limit: 500
 
-- [ ] **FE-41** Create `src/components/chat/messages/TextMessage.tsx` — plain text bubble
-- [ ] **FE-42** Create `src/components/chat/messages/FilterAppliedMessage.tsx` — shows "Applied X filters" with a summary list and result count
-- [ ] **FE-43** Create `src/components/chat/messages/ErrorMessage.tsx` — error bubble with retry button
+- [x] **FE-41** Create `src/components/chat/messages/TextMessage.tsx` — plain text bubble
+- [x] **FE-42** Create `src/components/chat/messages/FilterAppliedMessage.tsx` — shows "Applied X filters" with a summary list and result count
+- [x] **FE-43** Create `src/components/chat/messages/ErrorMessage.tsx` — error bubble with retry button
 
-- [ ] **FE-44** Create `src/components/chat/ChatThread.tsx`:
+- [x] **FE-44** Create `src/components/chat/ChatThread.tsx`:
   - Renders `Message[]` from `chatStore`
   - Routes each message to the correct message component via `ChatMessage.tsx`
   - Auto-scrolls to bottom on new message
 
-- [ ] **FE-45** Create `src/components/chat/ChatPanel.tsx` — the full right panel:
+- [x] **FE-45** Create `src/components/chat/ChatPanel.tsx` — the full right panel:
   - `<ChatThread />` (scrollable, flex-grow)
   - `<ChatInput />` (pinned to bottom)
   - Suggested prompts on first load (empty state): "Show me profitable small-caps", "IT stocks with high ROE", "Low debt dividend payers"
 
-- [ ] **FE-46** Wire `ChatPanel` into `ScreenerLayout.tsx` (replace the placeholder div). The two-panel is now fully functional:
+- [x] **FE-46** Wire `ChatPanel` into `ScreenerLayout.tsx` (replace the placeholder div). The two-panel is now fully functional:
   - User types a query → `chatStore.sendQuery()` → calls `/api/ai/parse-query` → calls `screenerStore.mergeFilters()` → left panel results update → chat shows `FilterAppliedMessage`.
 
 ---
