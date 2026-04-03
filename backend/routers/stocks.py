@@ -258,9 +258,9 @@ def get_stock(symbol: str):
     )
     stock["fundamentals"] = fund_resp.data
 
-    # Fetch last 365 days of prices (ordered ascending for chart)
+    # Fetch last 5 years of prices (ordered ascending for chart)
     from datetime import date, timedelta
-    cutoff = (date.today() - timedelta(days=365)).isoformat()
+    cutoff = (date.today() - timedelta(days=365 * 5)).isoformat()
     prices_resp = (
         supabase.table("stock_prices")
         .select("date,open,high,low,close,volume")

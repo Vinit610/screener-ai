@@ -1063,9 +1063,9 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P8.1 — Supabase Auth Configuration
 
-- [ ] **AUTH-01** In Supabase dashboard → Authentication → Providers: Enable **Google OAuth**. Add your app's `callback URL` to Google Cloud Console OAuth credentials. The callback URL is `https://<your-supabase-project>.supabase.co/auth/v1/callback`.
+- [x] **AUTH-01** In Supabase dashboard → Authentication → Providers: Enable **Google OAuth**. Add your app's `callback URL` to Google Cloud Console OAuth credentials. The callback URL is `https://<your-supabase-project>.supabase.co/auth/v1/callback`.
 
-- [ ] **AUTH-02** In Supabase → Authentication → Email: Enable email + password auth. Disable "Confirm email" for dev (re-enable before launch).
+- [x] **AUTH-02** In Supabase → Authentication → Email: Enable email + password auth. Disable "Confirm email" for dev (re-enable before launch).
 
 ### P8.2 — Auth Pages
 

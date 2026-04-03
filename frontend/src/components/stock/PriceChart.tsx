@@ -24,13 +24,15 @@ interface PriceChartProps {
   symbol: string;
 }
 
-type TimeRange = "1M" | "3M" | "6M" | "1Y" | "MAX";
+type TimeRange = "1M" | "3M" | "6M" | "1Y" | "3Y" | "5Y" | "MAX";
 
 const RANGE_DAYS: Record<TimeRange, number | null> = {
   "1M": 30,
   "3M": 90,
   "6M": 180,
   "1Y": 365,
+  "3Y": 365 * 3,
+  "5Y": 365 * 5,
   MAX: null,
 };
 
@@ -63,6 +65,7 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
       ? filteredPrices[filteredPrices.length - 1].close
       : 0;
   const isPositive = endPrice >= startPrice;
+  const gradientId = `priceGradient-${range}-${isPositive ? "up" : "down"}`;
 
   if (!prices.length) {
     return (
@@ -114,7 +117,7 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={filteredPrices}>
           <defs>
-            <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop
                 offset="5%"
                 stopColor={isPositive ? "#22c55e" : "#ef4444"}
@@ -165,7 +168,7 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
             dataKey="close"
             stroke={isPositive ? "#22c55e" : "#ef4444"}
             strokeWidth={1.5}
-            fill="url(#priceGradient)"
+            fill={`url(#${gradientId})`}
           />
         </AreaChart>
       </ResponsiveContainer>
