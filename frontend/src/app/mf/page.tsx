@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import MFCard from "@/components/mf/MFCard";
 import MFFilterPanel from "@/components/mf/MFFilterPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { BACKEND_URL } from "@/lib/api";
+import { getBackendUrl } from "@/lib/api";
 
 interface MFFilters {
   category?: string;
@@ -55,7 +55,7 @@ export default function MFPage() {
       params.set("sort_dir", "desc");
 
       const res = await fetch(
-        `${BACKEND_URL}/api/mf/screen?${params.toString()}`
+        `${getBackendUrl()}/api/mf/screen?${params.toString()}`
       );
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();

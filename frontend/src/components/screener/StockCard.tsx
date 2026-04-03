@@ -24,7 +24,8 @@ function fmtCr(v: number | null | undefined): string {
 
 export default function StockCard({ stock, variant, showAI }: StockCardProps) {
   const f = stock.fundamentals;
-  const [aiEnabled, setAiEnabled] = useState(false);
+  const isDetail = variant === "detail";
+  const [aiEnabled, setAiEnabled] = useState(isDetail);
   const { user } = useUserStore();
   const isAuthenticated = !!user;
   const effectiveShowAI = showAI !== false && isAuthenticated;
@@ -40,7 +41,6 @@ export default function StockCard({ stock, variant, showAI }: StockCardProps) {
   const mcap = stock.market_cap_cr;
 
   const isCompact = variant === "table-row";
-  const isDetail = variant === "detail";
 
   return (
     <div

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { useScreenerStore } from './screenerStore'
 import type { ChatMessage, ScreenerFilters } from '@/types'
-import { BACKEND_URL } from '@/lib/api'
+import { getBackendUrl } from '@/lib/api'
 
 export interface ChatState {
   messages: ChatMessage[]
@@ -68,7 +68,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isAIThinking: true, error: null })
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/ai/chat`, {
+      const response = await fetch(`${getBackendUrl()}/api/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: query })

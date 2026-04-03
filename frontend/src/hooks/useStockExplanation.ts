@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { BACKEND_URL } from "@/lib/api";
+import { getBackendUrl } from "@/lib/api";
 
 export function useStockExplanation(symbol: string, enabled: boolean) {
   const [explanation, setExplanation] = useState("");
@@ -27,7 +27,7 @@ export function useStockExplanation(symbol: string, enabled: boolean) {
       setError(null);
 
       try {
-        const response = await fetch(`${BACKEND_URL}/api/ai/explain-stock`, {
+        const response = await fetch(`${getBackendUrl()}/api/ai/explain-stock`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbol }),

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import SentimentBadge from "@/components/ui/SentimentBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { News } from "@/types";
-import { BACKEND_URL } from "@/lib/api";
+import { getBackendUrl } from "@/lib/api";
 
 interface NewsFeedProps {
   symbol: string;
@@ -31,7 +31,7 @@ export default function NewsFeed({ symbol }: NewsFeedProps) {
       setError(null);
       try {
         const res = await fetch(
-          `${BACKEND_URL}/api/stocks/${encodeURIComponent(symbol)}/news`
+          `${getBackendUrl()}/api/stocks/${encodeURIComponent(symbol)}/news`
         );
         if (!res.ok) throw new Error(`Failed to fetch news: ${res.status}`);
         const data = await res.json();

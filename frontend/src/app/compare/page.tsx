@@ -7,7 +7,7 @@ import ComparisonTable, {
 } from "@/components/mf/ComparisonTable";
 import StreamingText from "@/components/ui/StreamingText";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { BACKEND_URL } from "@/lib/api";
+import { getBackendUrl } from "@/lib/api";
 
 type CompareMode = "stocks" | "mf";
 
@@ -46,7 +46,7 @@ export default function ComparePage() {
       }
 
       const res = await fetch(
-        `${BACKEND_URL}/api/compare?${params.toString()}`
+        `${getBackendUrl()}/api/compare?${params.toString()}`
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -75,7 +75,7 @@ export default function ComparePage() {
     setNarrative("");
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/ai/compare`, {
+      const res = await fetch(`${getBackendUrl()}/api/ai/compare`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

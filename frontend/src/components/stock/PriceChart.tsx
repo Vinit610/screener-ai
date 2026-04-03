@@ -114,7 +114,7 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
       </div>
 
       {/* Chart */}
-      <ResponsiveContainer width="100%" height={280}>
+      <ResponsiveContainer key={range} width="100%" height={280}>
         <AreaChart data={filteredPrices}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">

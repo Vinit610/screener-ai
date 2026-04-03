@@ -35,7 +35,7 @@ const defaultFilters: ScreenerFilters = {
   exclude_loss_making: undefined,
 }
 
-import { BACKEND_URL } from '@/lib/api'
+import { getBackendUrl } from '@/lib/api'
 
 /**
  * Convert the local filter state into query-parameter pairs that match the
@@ -124,7 +124,7 @@ export const useScreenerStore = create<ScreenerState>((set, get) => ({
 
     try {
       const params = filtersToSearchParams(filters, page, limit, sortBy, sortDir)
-      const res = await fetch(`${BACKEND_URL}/api/stocks/screen?${params.toString()}`)
+      const res = await fetch(`${getBackendUrl()}/api/stocks/screen?${params.toString()}`)
 
       if (!res.ok) {
         throw new Error(`API error: ${res.status}`)

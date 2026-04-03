@@ -267,6 +267,7 @@ def get_stock(symbol: str):
         .eq("stock_id", stock["id"])
         .gte("date", cutoff)
         .order("date", desc=False)
+        .limit(2000)
         .execute()
     )
     price_rows = prices_resp.data or []
