@@ -7,9 +7,7 @@ import ComparisonTable, {
 } from "@/components/mf/ComparisonTable";
 import StreamingText from "@/components/ui/StreamingText";
 import { Skeleton } from "@/components/ui/Skeleton";
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+import { BACKEND_URL } from "@/lib/api";
 
 type CompareMode = "stocks" | "mf";
 

@@ -4,9 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import MFCard from "@/components/mf/MFCard";
 import MFFilterPanel from "@/components/mf/MFFilterPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+import { BACKEND_URL } from "@/lib/api";
 
 interface MFFilters {
   category?: string;

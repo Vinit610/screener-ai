@@ -60,8 +60,7 @@ export default function OnboardingPage() {
         return;
       }
 
-      const backendUrl =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      const { BACKEND_URL: backendUrl } = await import("@/lib/api");
 
       const resp = await fetch(`${backendUrl}/api/auth/onboarding`, {
         method: "POST",

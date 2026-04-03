@@ -35,7 +35,7 @@ const defaultFilters: ScreenerFilters = {
   exclude_loss_making: undefined,
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+import { BACKEND_URL } from '@/lib/api'
 
 /**
  * Convert the local filter state into query-parameter pairs that match the

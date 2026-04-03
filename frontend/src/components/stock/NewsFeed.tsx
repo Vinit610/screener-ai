@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import SentimentBadge from "@/components/ui/SentimentBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { News } from "@/types";
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+import { BACKEND_URL } from "@/lib/api";
 
 interface NewsFeedProps {
   symbol: string;

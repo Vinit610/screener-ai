@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { useScreenerStore } from './screenerStore'
 import type { ChatMessage, ScreenerFilters } from '@/types'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+import { BACKEND_URL } from '@/lib/api'
 
 export interface ChatState {
   messages: ChatMessage[]
