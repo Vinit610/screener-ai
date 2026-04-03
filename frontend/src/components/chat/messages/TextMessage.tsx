@@ -14,7 +14,9 @@ export default function TextMessage({ content, role }: TextMessageProps) {
           : "mr-auto bg-surface text-gray-200"
       }`}
     >
-      {content}
+      <div className="whitespace-pre-wrap break-words leading-relaxed">
+        {content}
+      </div>
     </div>
   );
 }

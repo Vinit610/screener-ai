@@ -6,6 +6,8 @@ Functions:
   2. validate_filter_output        — strip invalid / hallucinated keys
   3. stream_stock_explanation      — SSE stream of per-stock AI insight
   4. stream_comparison             — SSE stream of head-to-head narrative
+  5. classify_chat_intent          — route user message to appropriate handler
+  6. stream_chat_response          — general-purpose stock chat (SSE)
 """
 from __future__ import annotations
 
@@ -148,6 +150,69 @@ VALID_SECTORS = {
 }
 
 VALID_MARKET_CAP_CATEGORIES = {"large", "mid", "small", "micro"}
+
+# ── Intent classification & chat prompts ─────────────────────────────────────
+
+INTENT_CLASSIFICATION_PROMPT = """You are an intent classifier for an Indian stock screener chat.
+
+Classify the user message into ONE of these intents:
+- "filter": The user wants to screen/filter stocks by criteria (e.g. "show me IT stocks with high ROE", "small cap stocks with low debt")
+- "stock_query": The user is asking about a specific stock or company (e.g. "tell me about TCS", "analyze Reliance fundamentals", "is INFY overvalued?")
+- "general": The user is asking a general finance/market question or having a conversation (e.g. "what is PE ratio?", "how to analyze a stock?", "hello")
+
+Also extract the stock symbol if present (Indian NSE symbols like TCS, INFY, RELIANCE, HDFCBANK etc.).
+
+Return ONLY a JSON object:
+{{"intent": "filter|stock_query|general", "symbol": "SYMBOL_OR_NULL", "query": "original query"}}
+
+If no specific stock symbol is mentioned, set symbol to null.
+
+USER MESSAGE: {user_message}
+OUTPUT:
+"""
+
+STOCK_CHAT_PROMPT = """You are a knowledgeable Indian equity analyst assistant. The user wants to understand {symbol} ({name}) in depth.
+
+Here are the current fundamentals:
+- Sector: {sector}
+- Market Cap: {market_cap_cr} Cr
+- PE Ratio: {pe}
+- PB Ratio: {pb}
+- ROE: {roe}%
+- ROCE: {roce}%
+- Debt to Equity: {debt_to_equity}
+- Net Margin: {net_margin}%
+- Operating Margin: {operating_margin}%
+- EPS: {eps}
+- Revenue: {revenue_cr} Cr
+- Net Profit: {net_profit_cr} Cr
+- Dividend Yield: {dividend_yield}%
+- Book Value: {book_value}
+- Graham Number: {graham_number}
+
+User's question: {user_question}
+
+Provide a detailed, data-driven analysis. Reference the actual numbers above. Be specific, not generic.
+Structure your response clearly. If the user asked a specific question, answer it directly.
+If they just want a general overview, cover: valuation, profitability, balance sheet strength, and key risks.
+Do NOT say "Buy" or "Sell". Use phrases like "appears attractively valued" or "warrants caution".
+Keep the tone educational and analytical. Use ₹ for currency and Cr for crores.
+"""
+
+GENERAL_CHAT_PROMPT = """You are a helpful Indian stock market assistant for a screener app.
+You can help users understand financial concepts, analyze stocks, and use the screener.
+
+Key capabilities you should mention when relevant:
+- Users can ask you to filter stocks (e.g. "show me profitable IT stocks with low debt")
+- Users can ask about specific stocks (e.g. "analyze TCS fundamentals")
+- Users can compare stocks using the comparison feature
+- The screener has filters for PE, PB, ROE, ROCE, D/E, Net Margin, Dividend Yield, Sector, Market Cap
+
+Be concise but informative. Use Indian market context (NSE/BSE, ₹, Cr).
+Do NOT give investment advice. Use educational language only.
+
+User message: {user_message}
+"""
 
 # ── Functions ────────────────────────────────────────────────────────────────
 
@@ -303,3 +368,88 @@ async def stream_comparison(
         logger.error("Gemini stream_comparison failed: %s", exc)
         yield f"data: {json.dumps({'type': 'token', 'text': f'Error: {exc}'})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+
+async def classify_chat_intent(message: str) -> dict:
+    """Classify the user's chat message into an intent category."""
+    prompt = INTENT_CLASSIFICATION_PROMPT.format(user_message=message)
+    try:
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            ),
+        )
+        text = response.text.strip()
+        result = json.loads(text)
+        # Validate intent
+        if result.get("intent") not in ("filter", "stock_query", "general"):
+            result["intent"] = "general"
+        return result
+    except Exception as exc:
+        logger.error("Gemini intent classification failed: %s", exc)
+        return {"intent": "general", "symbol": None, "query": message}
+
+
+async def stream_stock_chat(
+    symbol: str,
+    user_question: str,
+    stock_data: dict,
+) -> AsyncGenerator[str, None]:
+    """Stream a detailed fundamental analysis chat response for a specific stock."""
+    fundamentals = stock_data.get("fundamentals") or {}
+    tpl_kwargs = {
+        "name": stock_data.get("name", symbol),
+        "symbol": symbol,
+        "sector": stock_data.get("sector", "N/A"),
+        "pe": stock_data.get("pe", "N/A"),
+        "pb": stock_data.get("pb", "N/A"),
+        "roe": stock_data.get("roe", "N/A"),
+        "roce": stock_data.get("roce", "N/A"),
+        "debt_to_equity": stock_data.get("debt_to_equity", "N/A"),
+        "net_margin": stock_data.get("net_margin", "N/A"),
+        "operating_margin": fundamentals.get("operating_margin", "N/A"),
+        "dividend_yield": stock_data.get("dividend_yield", "N/A"),
+        "market_cap_cr": stock_data.get("market_cap_cr", "N/A"),
+        "eps": stock_data.get("eps", "N/A"),
+        "revenue_cr": fundamentals.get("revenue_cr", "N/A"),
+        "net_profit_cr": stock_data.get("net_profit_cr", "N/A"),
+        "book_value": fundamentals.get("book_value", "N/A"),
+        "graham_number": fundamentals.get("graham_number", "N/A"),
+        "user_question": user_question,
+    }
+    prompt = STOCK_CHAT_PROMPT.format(**tpl_kwargs)
+
+    try:
+        response = client.models.generate_content_stream(
+            model=MODEL_ID,
+            contents=prompt,
+        )
+        for chunk in response:
+            if chunk.text:
+                yield f"data: {json.dumps({'token': chunk.text})}\n\n"
+        yield "data: [DONE]\n\n"
+    except Exception as exc:
+        logger.error("Gemini stream_stock_chat failed: %s", exc)
+        yield f"data: {json.dumps({'token': f'Error: {exc}'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+
+async def stream_general_chat(message: str) -> AsyncGenerator[str, None]:
+    """Stream a general finance/market chat response."""
+    prompt = GENERAL_CHAT_PROMPT.format(user_message=message)
+
+    try:
+        response = client.models.generate_content_stream(
+            model=MODEL_ID,
+            contents=prompt,
+        )
+        for chunk in response:
+            if chunk.text:
+                yield f"data: {json.dumps({'token': chunk.text})}\n\n"
+        yield "data: [DONE]\n\n"
+    except Exception as exc:
+        logger.error("Gemini stream_general_chat failed: %s", exc)
+        yield f"data: {json.dumps({'token': f'Error: {exc}'})}\n\n"
+        yield "data: [DONE]\n\n"

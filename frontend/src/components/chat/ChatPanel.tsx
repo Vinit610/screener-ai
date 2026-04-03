@@ -6,8 +6,10 @@ import ChatInput from "./ChatInput";
 
 const SUGGESTED_PROMPTS = [
   "Show me profitable small-caps",
+  "Analyze TCS fundamentals",
   "IT stocks with high ROE",
-  "Low debt dividend payers",
+  "Is RELIANCE overvalued?",
+  "What is a good PE ratio?",
 ];
 
 export default function ChatPanel() {

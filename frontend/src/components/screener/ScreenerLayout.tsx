@@ -11,11 +11,11 @@ export default function ScreenerLayout() {
   const [mobileTab, setMobileTab] = useState<MobileTab>("screener");
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col h-[calc(100vh-2rem)] overflow-hidden">
       {/* ── Desktop layout (≥768px) ─────────────────────────────────── */}
-      <div className="hidden flex-1 md:flex">
+      <div className="hidden flex-1 md:flex overflow-hidden">
         {/* Left panel: FilterPanel + ResultsTable (≈60%) */}
-        <div className="flex flex-1 gap-4 overflow-hidden p-4" style={{ flex: "0 0 60%" }}>
+        <div className="flex gap-4 overflow-hidden p-4" style={{ flex: "0 0 60%" }}>
           {/* Filter sidebar */}
           <div className="w-64 shrink-0 overflow-y-auto">
             <FilterPanel />
@@ -28,7 +28,7 @@ export default function ScreenerLayout() {
         </div>
 
         {/* Right panel: Chat (≈40%) */}
-        <div className="flex flex-col border-l border-border" style={{ flex: "0 0 40%" }}>
+        <div className="flex flex-col border-l border-border overflow-hidden" style={{ flex: "0 0 40%" }}>
           <ChatPanel />
         </div>
       </div>

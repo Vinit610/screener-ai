@@ -100,7 +100,7 @@ export const useScreenerStore = create<ScreenerState>((set, get) => ({
   results: [],
   isLoading: false,
   page: 1,
-  limit: 50,
+  limit: 20,
   total: 0,
   sortBy: 'market_cap_cr',
   sortDir: 'desc',

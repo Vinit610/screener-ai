@@ -13,9 +13,15 @@ interface ChatThreadProps {
 export default function ChatThread({ messages, isAIThinking, onRetry }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Scroll to bottom on new messages or content updates (streaming)
+  const lastMsgContent = messages[messages.length - 1]?.content;
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, isAIThinking]);
+  }, [messages.length, isAIThinking, lastMsgContent]);
+
+  // Only show thinking dots before the streaming starts (no assistant message yet after last user msg)
+  const lastMsg = messages[messages.length - 1];
+  const showThinking = isAIThinking && (!lastMsg || lastMsg.role === 'user');
 
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-3 py-4">
@@ -26,7 +32,7 @@ export default function ChatThread({ messages, isAIThinking, onRetry }: ChatThre
           onRetry={onRetry}
         />
       ))}
-      {isAIThinking && (
+      {showThinking && (
         <div className="mr-auto flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-sm text-muted">
           <span className="inline-flex gap-1">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
