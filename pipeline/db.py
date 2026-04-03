@@ -1,39 +1,55 @@
 from supabase import create_client, Client
 from typing import List, Dict, Optional
+import logging
 from config import config
+
+logger = logging.getLogger(__name__)
 
 # Initialize Supabase client with service role key
 supabase: Client = create_client(config.supabase_url, config.supabase_service_role_key)
+
+# Supabase has a payload size limit; batch large upserts
+UPSERT_BATCH_SIZE = 500
+
+def _batched_upsert(table: str, records: List[Dict], on_conflict: str) -> None:
+    """Upsert records in batches to avoid payload size limits."""
+    for i in range(0, len(records), UPSERT_BATCH_SIZE):
+        batch = records[i:i + UPSERT_BATCH_SIZE]
+        try:
+            supabase.table(table).upsert(batch, on_conflict=on_conflict).execute()
+        except Exception as e:
+            logger.error(f"Failed to upsert batch {i // UPSERT_BATCH_SIZE + 1} into {table}: {e}")
+            raise
 
 def upsert_stocks(records: List[Dict]) -> None:
     """Upsert stocks into the stocks table on conflict symbol."""
     if not records:
         return
-    supabase.table('stocks').upsert(records, on_conflict='symbol').execute()
+    _batched_upsert('stocks', records, 'symbol')
 
 def upsert_fundamentals(records: List[Dict]) -> None:
     """Upsert stock fundamentals into the stock_fundamentals table on conflict stock_id."""
     if not records:
         return
-    supabase.table('stock_fundamentals').upsert(records, on_conflict='stock_id').execute()
+    _batched_upsert('stock_fundamentals', records, 'stock_id')
 
 def upsert_prices(records: List[Dict]) -> None:
     """Upsert stock prices into the stock_prices table on conflict (stock_id, date)."""
     if not records:
         return
-    supabase.table('stock_prices').upsert(records, on_conflict='stock_id,date').execute()
+    _batched_upsert('stock_prices', records, 'stock_id,date')
 
 def upsert_navs(records: List[Dict]) -> None:
     """Upsert MF NAVs into the mf_navs table on conflict (fund_id, date)."""
     if not records:
         return
-    supabase.table('mf_navs').upsert(records, on_conflict='fund_id,date').execute()
+    _batched_upsert('mf_navs', records, 'fund_id,date')
 
 def upsert_funds(records: List[Dict]) -> None:
     """Upsert mutual funds into the mutual_funds table on conflict scheme_code."""
     if not records:
         return
-    supabase.table('mutual_funds').upsert(records, on_conflict='scheme_code').execute()
+    _batched_upsert('mutual_funds', records, 'scheme_code')
 
 def get_stock_id(symbol: str) -> Optional[str]:
     """Look up stock UUID by symbol."""
@@ -42,7 +58,6 @@ def get_stock_id(symbol: str) -> Optional[str]:
         if response.data and len(response.data) > 0:
             return response.data[0]['id']
     except Exception as e:
-        logger = __import__('logging').getLogger(__name__)
         logger.error(f"Failed to get stock_id for {symbol}: {e}")
     return None
 
@@ -53,7 +68,6 @@ def get_fund_id(scheme_code: str) -> Optional[str]:
         if response.data and len(response.data) > 0:
             return response.data[0]['id']
     except Exception as e:
-        logger = __import__('logging').getLogger(__name__)
         logger.error(f"Failed to get fund_id for {scheme_code}: {e}")
     return None
 
@@ -61,7 +75,7 @@ def upsert_news(records: List[Dict]) -> None:
     """Upsert news articles into the news table on conflict url."""
     if not records:
         return
-    supabase.table('news').upsert(records, on_conflict='url').execute()
+    _batched_upsert('news', records, 'url')
 
 def get_existing_news_urls() -> set:
     """Get set of existing news URLs."""

@@ -4,6 +4,8 @@ import random
 import requests
 import yfinance as yf
 import pandas as pd
+import numpy as np
+import math
 from typing import List, Dict, Optional
 import logging
 from db import upsert_stocks, upsert_prices, get_stock_id
@@ -55,10 +57,11 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 'symbol': clean_symbol(symbol),
                 'exchange': 'NSE',
                 'is_active': True,
+                'nse_listed': True,
                 'name': info.get('shortName', ''),
                 'sector': info.get('sector', ''),
                 'industry': info.get('industry', ''),
-                'market_cap_cr': market_cap_cr
+                'market_cap_cr': round(market_cap_cr, 2) if market_cap_cr else None
             }
         except Exception as e:
             retry_count += 1
@@ -83,6 +86,7 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                     'symbol': clean_symbol(symbol),
                     'exchange': 'NSE',
                     'is_active': True,
+                    'nse_listed': True,
                     'name': '',
                     'sector': '',
                     'industry': '',
@@ -155,15 +159,38 @@ def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, i
                         continue
 
                     for date, row in sym_data.iterrows():
+                        # Convert numpy types to Python native types
+                        # and handle NaN values
+                        def safe_float(val):
+                            if val is None or (isinstance(val, float) and math.isnan(val)):
+                                return None
+                            try:
+                                f = float(val)
+                                return None if math.isnan(f) else f
+                            except (ValueError, TypeError):
+                                return None
+
+                        def safe_int(val):
+                            if val is None:
+                                return None
+                            try:
+                                f = float(val)
+                                return None if math.isnan(f) else int(f)
+                            except (ValueError, TypeError):
+                                return None
+
+                        close_val = safe_float(row.get('Close'))
+                        if close_val is None:
+                            continue  # Skip rows without a close price
+
                         price_records.append({
                             'stock_id': stock_id,
                             'date': date.strftime('%Y-%m-%d'),
-                            'open': row.get('Open'),
-                            'high': row.get('High'),
-                            'low': row.get('Low'),
-                            'close': row.get('Close'),
-                            'volume': row.get('Volume'),
-                            # 'adj_close': row.get('Adj Close')
+                            'open': safe_float(row.get('Open')),
+                            'high': safe_float(row.get('High')),
+                            'low': safe_float(row.get('Low')),
+                            'close': close_val,
+                            'volume': safe_int(row.get('Volume')),
                         })
                 except Exception as e:
                     logger.error(f"Error processing symbol {sym}: {e}")

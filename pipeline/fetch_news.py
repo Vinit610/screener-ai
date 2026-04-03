@@ -1,5 +1,7 @@
 import feedparser
 import asyncio
+import json
+import re
 import google.generativeai as genai
 from typing import List, Dict
 import logging
@@ -39,20 +41,27 @@ async def analyze_sentiment_batch(articles: List[Dict]) -> List[Dict]:
     """Analyze sentiment for a batch of articles using Gemini."""
     results = []
     for article in articles:
-        prompt = SENTIMENT_PROMPT.format(title=article['title'], summary=article.get('summary', ''))
+        prompt = SENTIMENT_PROMPT.format(title=article['headline'], summary=article.get('summary', ''))
         try:
             response = model.generate_content(prompt)
             # Parse JSON response
-            import json
-            data = json.loads(response.text.strip())
+            # Handle markdown code fences in Gemini response
+            raw_text = response.text.strip()
+            if raw_text.startswith('```'):
+                raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
+                raw_text = re.sub(r'\s*```$', '', raw_text)
+            data = json.loads(raw_text)
+            # Clamp sentiment_score to valid range
+            score = float(data.get('sentiment_score', 0.0))
+            score = max(-1.0, min(1.0, score))
             results.append({
                 **article,
                 'sentiment': data.get('sentiment', 'neutral'),
-                'sentiment_score': data.get('sentiment_score', 0.0),
+                'sentiment_score': score,
                 'related_symbols': data.get('related_symbols', [])
             })
         except Exception as e:
-            logger.error(f"Failed to analyze article {article['title']}: {e}")
+            logger.error(f"Failed to analyze article '{article['headline']}': {e}")
             results.append({
                 **article,
                 'sentiment': 'neutral',
@@ -71,6 +80,8 @@ async def fetch_news() -> None:
         logger.info(f"Parsing feed: {feed_url}")
         try:
             feed = feedparser.parse(feed_url)
+            # Derive source name from feed URL
+            source = feed.feed.get('title', feed_url.split('/')[2] if '/' in feed_url else feed_url)
             for entry in feed.entries:
                 url = entry.link
                 if url in existing_urls:
@@ -79,6 +90,7 @@ async def fetch_news() -> None:
                     'headline': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': url,
+                    'source': source,
                     'published_at': getattr(entry, 'published', None)
                 }
                 all_articles.append(article)
