@@ -753,7 +753,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `GEMINI_API_KEY`
 
-- [ ] **PIPE-18** Trigger `daily_pipeline.yml` manually via GitHub UI (`workflow_dispatch`). Confirm it runs to completion. Check Supabase for new rows.
+- [x] **PIPE-18** Trigger `daily_pipeline.yml` manually via GitHub UI (`workflow_dispatch`). Confirm it runs to completion. Check Supabase for new rows.
 
 ---
 
@@ -763,7 +763,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P5.1 — Stock Screener Endpoint
 
-- [ ] **BE-16** 🔑 Implement `GET /api/stocks/screen` in `backend/routers/stocks.py`:
+- [x] **BE-16** 🔑 Implement `GET /api/stocks/screen` in `backend/routers/stocks.py`:
 
   **Query parameters:**
   ```python
@@ -797,21 +797,21 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   7. Execute query. Cache result for 30 minutes (`TTL=1800`).
   8. Return `{"data": [...], "total": <count>, "page": page, "limit": limit}`.
 
-- [ ] **BE-17** Implement `GET /api/stocks/{symbol}` — full stock detail:
+- [x] **BE-17** Implement `GET /api/stocks/{symbol}` — full stock detail:
   - Join `stocks` + `stock_fundamentals` + latest `stock_prices` row.
   - Include last 365 days of prices (for chart).
   - Cache for 30 minutes per symbol.
 
-- [ ] **BE-18** Implement `GET /api/stocks/{symbol}/news` — fetch news for a stock:
+- [x] **BE-18** Implement `GET /api/stocks/{symbol}/news` — fetch news for a stock:
   - Query `news` where `symbol = ANY(related_symbols)`.
   - Return latest 20 articles, sorted by `published_at DESC`.
   - Cache for 15 minutes.
 
-- [ ] **BE-19** Add input validation: create `backend/schemas/stock_schemas.py` with Pydantic models for all request/response shapes. Use these in the router function signatures.
+- [x] **BE-19** Add input validation: create `backend/schemas/stock_schemas.py` with Pydantic models for all request/response shapes. Use these in the router function signatures.
 
 ### P5.2 — MF Screener Endpoint
 
-- [ ] **BE-20** Implement `GET /api/mf/screen` in `backend/routers/mf.py`:
+- [x] **BE-20** Implement `GET /api/mf/screen` in `backend/routers/mf.py`:
 
   **Query parameters:**
   ```python
@@ -828,7 +828,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
   Query `mutual_funds` table with filters. Cache for 1 hour (MF data changes slowly).
 
-- [ ] **BE-21** Implement `GET /api/mf/{scheme_code}` — full MF detail:
+- [x] **BE-21** Implement `GET /api/mf/{scheme_code}` — full MF detail:
   - Return fund metadata + last 365 days of NAVs (for chart).
   - Compute rolling returns from NAV history: 1M, 3M, 6M, 1Y, 3Y returns.
   - Compute Sharpe ratio from NAV history (risk-free rate = 6.5%).
@@ -836,7 +836,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P5.3 — Comparison Endpoint
 
-- [ ] **BE-22** Implement `GET /api/compare` — structured diff (no AI yet):
+- [x] **BE-22** Implement `GET /api/compare` — structured diff (no AI yet):
   ```python
   # Query params: symbol_a, symbol_b (for stocks) OR scheme_code_a, scheme_code_b (for MFs)
   # Returns side-by-side metric data for both instruments
@@ -851,40 +851,40 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P6.1 — UI Component Library (Base)
 
-- [ ] **FE-24** Create `src/components/ui/Badge.tsx` — small pill for labels (sector, sentiment):
+- [x] **FE-24** Create `src/components/ui/Badge.tsx` — small pill for labels (sector, sentiment):
   ```tsx
   interface BadgeProps { label: string; variant: 'sector'|'positive'|'negative'|'neutral'; }
   ```
 
-- [ ] **FE-25** Create `src/components/ui/Metric.tsx` — key metric display tile:
+- [x] **FE-25** Create `src/components/ui/Metric.tsx` — key metric display tile:
   ```tsx
   interface MetricProps { label: string; value: string | number; color?: 'default'|'green'|'red'; }
   ```
 
-- [ ] **FE-26** Create `src/components/ui/StreamingText.tsx` — progressively renders AI token stream:
+- [x] **FE-26** Create `src/components/ui/StreamingText.tsx` — progressively renders AI token stream:
   ```tsx
   // Shows a blinking cursor while isStreaming=true
   interface StreamingTextProps { text: string; isStreaming: boolean; }
   ```
 
-- [ ] **FE-27** Create `src/components/ui/Skeleton.tsx` — loading skeleton for cards and table rows.
+- [x] **FE-27** Create `src/components/ui/Skeleton.tsx` — loading skeleton for cards and table rows.
 
-- [ ] **FE-28** Create `src/components/ui/SentimentBadge.tsx` — renders "Positive / Negative / Neutral" with colour coding and a score bar.
+- [x] **FE-28** Create `src/components/ui/SentimentBadge.tsx` — renders "Positive / Negative / Neutral" with colour coding and a score bar.
 
 ### P6.2 — Filter Panel
 
-- [ ] **FE-29** 🔑 Create `src/components/screener/FilterSlider.tsx` — a range slider with:
+- [x] **FE-29** 🔑 Create `src/components/screener/FilterSlider.tsx` — a range slider with:
   - Min/Max number inputs (typed override)
   - Debounced onChange (300ms) to avoid excessive API calls while dragging
   - Label + current range display
   - Props: `label`, `min`, `max`, `step`, `value: [number, number]`, `onChange`
 
-- [ ] **FE-30** Create `src/components/screener/FilterSection.tsx` — collapsible section wrapper:
+- [x] **FE-30** Create `src/components/screener/FilterSection.tsx` — collapsible section wrapper:
   - Toggle open/closed state
   - Props: `title`, `defaultOpen?: boolean`, `children`
   - Sections to use: "Valuation", "Quality", "Size", "Returns", "Sector"
 
-- [ ] **FE-31** Create `src/components/screener/FilterPanel.tsx` — full filter panel using `FilterSection` and `FilterSlider`:
+- [x] **FE-31** Create `src/components/screener/FilterPanel.tsx` — full filter panel using `FilterSection` and `FilterSlider`:
   - Reads from `screenerStore.filters`
   - Calls `screenerStore.setFilters()` on change
   - Sections:
@@ -898,7 +898,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P6.3 — Results Table
 
-- [ ] **FE-32** Create `src/components/screener/StockCard.tsx` — THE core reusable unit. Must support three variants via a `variant` prop:
+- [x] **FE-32** Create `src/components/screener/StockCard.tsx` — THE core reusable unit. Must support three variants via a `variant` prop:
   - `"table-row"` — compact, for screener results
   - `"chat-embed"` — medium, for chat panel responses
   - `"detail"` — full, for stock detail page
@@ -909,7 +909,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   - AI explanation area (empty placeholder for now — filled in Phase 7)
   - Disclaimer line in small muted text
 
-- [ ] **FE-33** Create `src/components/screener/ResultsTable.tsx`:
+- [x] **FE-33** Create `src/components/screener/ResultsTable.tsx`:
   - Reads `screenerStore.results` and `screenerStore.isLoading`
   - Renders `<StockCard variant="table-row" />` for each result
   - Shows `<Skeleton />` rows while loading
@@ -917,18 +917,18 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   - Empty state: "No stocks match your filters. Try relaxing the criteria."
   - On mount, calls `screenerStore.fetchResults()`
 
-- [ ] **FE-34** Wire `screenerStore.fetchResults()` to actually call `GET /api/stocks/screen` with current filter state. Whenever `filters` or `page` changes, re-fetch (use Zustand `subscribe` or `useEffect` watching the store).
+- [x] **FE-34** Wire `screenerStore.fetchResults()` to actually call `GET /api/stocks/screen` with current filter state. Whenever `filters` or `page` changes, re-fetch (use Zustand `subscribe` or `useEffect` watching the store).
 
 ### P6.4 — Two-Panel Layout
 
-- [ ] **FE-35** 🔑 Create `src/components/screener/ScreenerLayout.tsx` — the two-panel shell:
+- [x] **FE-35** 🔑 Create `src/components/screener/ScreenerLayout.tsx` — the two-panel shell:
   - **Desktop (≥768px):** Side by side — `FilterPanel + ResultsTable` (60%) | `ChatPanel` placeholder (40%)
   - **Mobile (<768px):** Bottom tab bar switching between "Screener" and "Chat" views
   - `ChatPanel` is an empty placeholder div for now (filled in Phase 7)
 
-- [ ] **FE-36** Wire `app/screener/page.tsx` to render `<ScreenerLayout />`. Remove the placeholder text.
+- [x] **FE-36** Wire `app/screener/page.tsx` to render `<ScreenerLayout />`. Remove the placeholder text.
 
-- [ ] **FE-37** Manually test the full filter → fetch → render flow:
+- [x] **FE-37** Manually test the full filter → fetch → render flow:
   1. Visit `/screener`
   2. The results table loads with default sort (market_cap_cr desc)
   3. Change sector to "IT" — results update
@@ -949,7 +949,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   from config import settings
 
   genai.configure(api_key=settings.gemini_api_key)
-  model = genai.GenerativeModel("gemini-2.0-flash")
+  model = genai.GenerativeModel("gemini-3-flash-preview")
   ```
   All four AI functions live in this file.
 

@@ -115,15 +115,14 @@ export interface ScreenerFilters {
   debt_to_equity: [number, number]
   net_margin: [number, number]
 
-  // Size filters
-  market_cap_cr: [number, number]
+  // Size filters (category‐based, matches backend query param)
+  market_cap_category?: MarketCapCategory
 
-  // Returns filters
-  revenue_growth: [number, number]
-  profit_growth: [number, number]
+  // Sector filter (single sector string, matches backend query param)
+  sector?: string
 
-  // Sector filter
-  sectors: string[]
+  // Other
+  exclude_loss_making?: boolean
 }
 
 export interface MFFilters {
@@ -178,17 +177,33 @@ export interface AICompareRequest {
   symbol_b: string
 }
 
-// UI Component Types
+// UI Component Types — StockResult maps to backend screen response rows
 export interface StockResult {
   id: string
   symbol: string
   name: string
   sector: string | null
-  pe: number | null
-  pb: number | null
-  roe: number | null
   market_cap_cr: number | null
-  dividend_yield: number | null
+  // Nested fundamentals from backend (may be null if no fundamentals row)
+  fundamentals?: {
+    pe: number | null
+    pb: number | null
+    roe: number | null
+    roce: number | null
+    debt_to_equity: number | null
+    net_margin: number | null
+    dividend_yield: number | null
+    eps: number | null
+    revenue_cr: number | null
+    net_profit_cr: number | null
+    book_value: number | null
+    graham_number: number | null
+  } | null
+  // Flat aliases (kept for convenience / backward compat)
+  pe?: number | null
+  pb?: number | null
+  roe?: number | null
+  dividend_yield?: number | null
 }
 
 export type StockCardVariant = 'table-row' | 'detail' | 'chat-embed'
