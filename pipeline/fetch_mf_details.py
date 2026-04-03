@@ -116,7 +116,7 @@ def get_all_fund_scheme_codes() -> List[Dict]:
     offset = 0
     while True:
         resp = supabase.table('mutual_funds') \
-            .select('scheme_code,scheme_name,is_direct,expense_ratio,aum_cr,benchmark') \
+            .select('scheme_code,scheme_name,fund_house,is_direct,expense_ratio,aum_cr,benchmark') \
             .range(offset, offset + page_size - 1) \
             .execute()
         if not resp.data:
@@ -242,6 +242,7 @@ def enrich_funds(limit: Optional[int] = None) -> None:
     for i, fund in enumerate(needs_enrichment):
         scheme_code = fund['scheme_code']
         scheme_name = fund.get('scheme_name', '')
+        fund_house = fund.get('fund_house', '')
         is_direct = fund.get('is_direct', False)
 
         # Try to get category from AMFI portal first, then MFAPI
@@ -265,7 +266,7 @@ def enrich_funds(limit: Optional[int] = None) -> None:
             continue
 
         # Build update record
-        update = {'scheme_code': scheme_code}
+        update = {'scheme_code': scheme_code, 'scheme_name': scheme_name, 'fund_house': fund_house}
         changed = False
 
         # Expense ratio

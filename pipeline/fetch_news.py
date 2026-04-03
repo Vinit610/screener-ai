@@ -35,7 +35,7 @@ Respond in JSON format:
 """
 
 genai.configure(api_key=config.gemini_api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-3-flash-preview')
 
 async def analyze_sentiment_batch(articles: List[Dict]) -> List[Dict]:
     """Analyze sentiment for a batch of articles using Gemini."""
