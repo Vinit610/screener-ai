@@ -46,7 +46,7 @@ export default function ComparePage() {
       }
 
       const res = await fetch(
-        `${getBackendUrl()}/api/compare?${params.toString()}`
+        `${getBackendUrl()}/api/compare/?${params.toString()}`
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
