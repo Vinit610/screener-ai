@@ -13,6 +13,55 @@ from data_processor import clean_symbol
 import argparse
 from curl_cffi import requests
 
+
+def update_portfolio_current_values():
+    """Recalculate current_value on all portfolio_holdings where instrument_type='stock'.
+
+    Joins each holding's symbol to the latest stock price and updates current_value.
+    """
+    from db import supabase as sb
+
+    logger.info("Updating portfolio holdings current values...")
+    resp = (
+        sb.table("portfolio_holdings")
+        .select("id,symbol,quantity")
+        .eq("instrument_type", "stock")
+        .execute()
+    )
+    holdings = resp.data or []
+    if not holdings:
+        logger.info("No stock holdings to update")
+        return
+
+    updated = 0
+    for h in holdings:
+        stock_resp = (
+            sb.table("stocks")
+            .select("id")
+            .eq("symbol", h["symbol"])
+            .maybe_single()
+            .execute()
+        )
+        if not stock_resp.data:
+            continue
+        price_resp = (
+            sb.table("stock_prices")
+            .select("close")
+            .eq("stock_id", stock_resp.data["id"])
+            .order("date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not price_resp.data:
+            continue
+        new_cv = round(h["quantity"] * price_resp.data[0]["close"], 2)
+        sb.table("portfolio_holdings").update(
+            {"current_value": new_cv}
+        ).eq("id", h["id"]).execute()
+        updated += 1
+
+    logger.info(f"Updated current_value for {updated} portfolio holdings")
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -220,6 +269,12 @@ def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, i
     logger.info(f"  Total rows upserted: {total_upserted}")
     logger.info(f"  Failed symbols ({len(failed_symbols)}): {failed_symbols[:10]}{'...' if len(failed_symbols) > 10 else ''}")
     logger.info(f"{'='*60}")
+
+    # Update portfolio holdings with latest prices
+    try:
+        update_portfolio_current_values()
+    except Exception as e:
+        logger.error(f"Failed to update portfolio current values: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Fetch stock prices for Nifty 500')

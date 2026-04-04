@@ -1,9 +1,14 @@
 "use client";
 
+import { useEffect, useState, useCallback } from "react";
 import StockCard from "@/components/screener/StockCard";
 import FundamentalsGrid from "@/components/stock/FundamentalsGrid";
 import PriceChart from "@/components/stock/PriceChart";
 import NewsFeed from "@/components/stock/NewsFeed";
+import TradeButton from "@/components/portfolio/TradeButton";
+import { useUserStore } from "@/store/userStore";
+import { getBackendUrl } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 
 interface StockDetailClientProps {
   data: {
@@ -58,6 +63,46 @@ export default function StockDetailClient({
   data,
   symbol,
 }: StockDetailClientProps) {
+  const { user } = useUserStore();
+  const [token, setToken] = useState<string | null>(null);
+  const [cashBalance, setCashBalance] = useState(1000000);
+  const [heldQuantity, setHeldQuantity] = useState(0);
+
+  useEffect(() => {
+    async function init() {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) setToken(session.access_token);
+    }
+    init();
+  }, []);
+
+  const fetchPaperInfo = useCallback(async () => {
+    if (!token) return;
+    try {
+      const resp = await fetch(`${getBackendUrl()}/api/portfolio/paper`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) return;
+      const json = await resp.json();
+      setCashBalance(json.cash_balance);
+      const holding = (json.holdings || []).find(
+        (h: { symbol: string }) => h.symbol === symbol.toUpperCase()
+      );
+      setHeldQuantity(holding ? holding.quantity : 0);
+    } catch {
+      // silently fail
+    }
+  }, [token, symbol]);
+
+  useEffect(() => {
+    if (token) fetchPaperInfo();
+  }, [token, fetchPaperInfo]);
+
+  const currentPrice = data.latest_price?.close ?? null;
+
   const screenerUrl = new URL("/screener", window.location.origin);
   if (data.sector) {
     screenerUrl.searchParams.set("sector", data.sector);
@@ -97,14 +142,25 @@ export default function StockDetailClient({
         variant="detail"
       />
 
-      {/* Open in Screener */}
-      <div className="flex gap-3">
+      {/* Open in Screener + Paper Trade */}
+      <div className="flex flex-wrap items-center gap-3">
         <a
           href={screenerUrl.toString()}
           className="rounded-lg border border-border bg-surface px-4 py-2 text-xs text-muted transition hover:border-primary hover:text-white"
         >
           Open in Screener →
         </a>
+        {user && token && (
+          <TradeButton
+            symbol={symbol.toUpperCase()}
+            currentPrice={currentPrice}
+            cashBalance={cashBalance}
+            heldQuantity={heldQuantity}
+            backendUrl={getBackendUrl()}
+            token={token}
+            onTradeComplete={fetchPaperInfo}
+          />
+        )}
       </div>
 
       {/* Price chart */}

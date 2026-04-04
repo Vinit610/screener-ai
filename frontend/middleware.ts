@@ -63,27 +63,23 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session (important for keeping cookies fresh)
-  const { data: { session } } = await (supabase.auth as any).getSession()
+  // Validate user server-side — this avoids the browser lock contention
+  // that getSession() causes, and properly detects signed-out state.
+  const { data: { user } } = await supabase.auth.getUser()
 
   // Only protect specific routes — public pages (screener, stock, home) work without auth
   if (isProtectedRoute(request.nextUrl.pathname)) {
-    if (!session?.user) {
+    if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/auth/login'
       url.searchParams.set('next', request.nextUrl.pathname)
       return NextResponse.redirect(url)
     }
-
-    // If user is going to onboarding but already done, redirect to screener
-    if (request.nextUrl.pathname.startsWith('/onboarding')) {
-      // We can't check profile here easily, so let the page handle it
-    }
   }
 
   // If logged-in user visits auth pages, redirect to screener
   if (
-    session?.user &&
+    user &&
     (request.nextUrl.pathname.startsWith('/auth/login') ||
       request.nextUrl.pathname.startsWith('/auth/signup'))
   ) {

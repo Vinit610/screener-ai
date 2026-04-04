@@ -10,8 +10,6 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const supabase = createClient();
-
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -28,7 +26,8 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const supabase = createClient();
+    const { error: signUpError, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -42,12 +41,22 @@ export default function SignupPage() {
       return;
     }
 
-    // Redirect to onboarding after successful signup
-    window.location.href = "/onboarding";
+    // If auto-confirm is on, a session is created immediately → go to onboarding.
+    // If email confirmation is required, there is no session yet → tell the user.
+    if (data.session) {
+      window.location.href = "/onboarding";
+    } else {
+      setError(null);
+      setLoading(false);
+      // Show a "check your email" message instead of hard-redirecting
+      alert("Check your email for a confirmation link, then sign in.");
+      window.location.href = "/auth/login";
+    }
   }
 
   async function handleGoogleSignup() {
     setError(null);
+    const supabase = createClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

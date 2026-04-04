@@ -1183,21 +1183,21 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P11.1 — Backend: Portfolio API
 
-- [ ] **PORT-01** Implement `POST /api/portfolio/upload` in `backend/routers/portfolio.py`:
+- [x] **PORT-01** Implement `POST /api/portfolio/upload` in `backend/routers/portfolio.py`:
   - Accept `multipart/form-data` with a CSV or XLSX file
   - Use Gemini CSV parser from Design doc (Section 6, Feature 5)
   - Parse holdings, match symbols to `stocks` table
   - Save to `portfolio_holdings` with `user_id` from auth token
   - Return parsed holdings for confirmation before saving
 
-- [ ] **PORT-02** Implement `GET /api/portfolio` — return user's holdings with current values and P&L:
+- [x] **PORT-02** Implement `GET /api/portfolio` — return user's holdings with current values and P&L:
   ```python
   # Join portfolio_holdings with latest stock_prices to get current_value
   # Group by instrument_type (stock/mf)
   # Return total portfolio value, total unrealised P&L, holdings list
   ```
 
-- [ ] **PORT-03** Implement `POST /api/portfolio/holding` — manually add a single holding (for users who don't want to upload a CSV):
+- [x] **PORT-03** Implement `POST /api/portfolio/holding` — manually add a single holding (for users who don't want to upload a CSV):
   ```python
   class AddHoldingRequest(BaseModel):
       symbol: str
@@ -1208,32 +1208,32 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
       broker: str | None
   ```
 
-- [ ] **PORT-04** Implement `DELETE /api/portfolio/holding/{id}` — delete a holding.
+- [x] **PORT-04** Implement `DELETE /api/portfolio/holding/{id}` — delete a holding.
 
-- [ ] **PORT-05** Add portfolio value update step to `pipeline/fetch_prices.py`: after updating stock prices, run a query to recalculate `current_value` on all `portfolio_holdings` rows where `instrument_type='stock'`.
+- [x] **PORT-05** Add portfolio value update step to `pipeline/fetch_prices.py`: after updating stock prices, run a query to recalculate `current_value` on all `portfolio_holdings` rows where `instrument_type='stock'`.
 
 ### P11.2 — Frontend: Portfolio UI
 
-- [ ] **FE-47** Create `src/components/portfolio/PnLSummary.tsx` — top summary card showing:
+- [x] **FE-47** Create `src/components/portfolio/PnLSummary.tsx` — top summary card showing:
   - Total portfolio value (₹)
   - Total invested amount (₹)
   - Total unrealised P&L (₹ and %)
   - Day's change (₹ and %)
   - Colour coded: green for gains, red for losses
 
-- [ ] **FE-48** Create `src/components/portfolio/HoldingsTable.tsx` — sortable table:
+- [x] **FE-48** Create `src/components/portfolio/HoldingsTable.tsx` — sortable table:
   - Columns: Stock, Qty, Avg Buy Price, Current Price, Current Value, Unrealised P&L, P&L %
   - Sortable by any column
   - "Real Portfolio" and "Paper Portfolio" tabs to separate holdings
 
-- [ ] **FE-49** Create `src/components/portfolio/CSVUploader.tsx`:
+- [x] **FE-49** Create `src/components/portfolio/CSVUploader.tsx`:
   - Drag-and-drop zone for CSV/XLSX files
   - Shows detected broker name after upload
   - Shows parsed holdings list for confirmation
   - "Confirm Import" → saves to backend
   - Error state: "Could not detect broker format. Try manual entry."
 
-- [ ] **FE-50** Build `app/portfolio/page.tsx`:
+- [x] **FE-50** Build `app/portfolio/page.tsx`:
   - If no holdings: show uploader + "or Add manually" button
   - If has holdings: show `PnLSummary` + `HoldingsTable`
   - Floating "+" button to add a holding manually
@@ -1246,7 +1246,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
 
 ### P12.1 — Backend: Paper Trading API
 
-- [ ] **PAPER-01** Create `supabase/migrations/003_paper_trading.sql`:
+- [x] **PAPER-01** Create `supabase/migrations/003_paper_trading.sql`:
   ```sql
   CREATE TABLE paper_portfolio (
       id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1274,7 +1274,7 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   CREATE POLICY "Users see own paper trades" ON paper_trades FOR ALL USING (auth.uid() = user_id);
   ```
 
-- [ ] **PAPER-02** Implement `POST /api/portfolio/paper/buy` in `backend/routers/portfolio.py`:
+- [x] **PAPER-02** Implement `POST /api/portfolio/paper/buy` in `backend/routers/portfolio.py`:
   ```python
   class PaperTradeRequest(BaseModel):
       symbol: str
@@ -1289,35 +1289,35 @@ Create all page route files. Each should return a styled placeholder `<div>` wit
   # 6. Upsert into portfolio_holdings with is_paper=true
   ```
 
-- [ ] **PAPER-03** Implement `POST /api/portfolio/paper/sell`:
+- [x] **PAPER-03** Implement `POST /api/portfolio/paper/sell`:
   - Verify user holds enough quantity of the stock in paper portfolio
   - Add proceeds to `cash_balance`
   - Insert sell trade into `paper_trades`
   - Update or delete the `portfolio_holdings` row
 
-- [ ] **PAPER-04** Implement `GET /api/portfolio/paper` — return:
+- [x] **PAPER-04** Implement `GET /api/portfolio/paper` — return:
   - Cash balance
   - Paper holdings with current value
   - Total portfolio value (cash + holdings value)
   - P&L vs. ₹10 lakh baseline
   - Trade history (from `paper_trades`)
 
-- [ ] **PAPER-05** Implement `POST /api/portfolio/paper/reset` — reset paper portfolio: set `cash_balance = 1000000`, delete all paper holdings and trades for this user.
+- [x] **PAPER-05** Implement `POST /api/portfolio/paper/reset` — reset paper portfolio: set `cash_balance = 1000000`, delete all paper holdings and trades for this user.
 
 ### P12.2 — Frontend: Paper Trading UI
 
-- [ ] **FE-51** Create `src/components/portfolio/PaperPortfolioSummary.tsx` — similar to `PnLSummary` but shows virtual cash balance and paper P&L.
+- [x] **FE-51** Create `src/components/portfolio/PaperPortfolioSummary.tsx` — similar to `PnLSummary` but shows virtual cash balance and paper P&L.
 
-- [ ] **FE-52** Create `src/components/portfolio/TradeHistory.tsx` — table of all paper trades with date, symbol, buy/sell, quantity, price, total value.
+- [x] **FE-52** Create `src/components/portfolio/TradeHistory.tsx` — table of all paper trades with date, symbol, buy/sell, quantity, price, total value.
 
-- [ ] **FE-53** Create `src/components/portfolio/TradeButton.tsx` — "Simulate Buy" / "Simulate Sell" button:
+- [x] **FE-53** Create `src/components/portfolio/TradeButton.tsx` — "Simulate Buy" / "Simulate Sell" button:
   - Opens a modal: quantity input, shows current price, total cost, cash balance after trade
   - Confirm → calls buy/sell API
   - Disabled if insufficient cash (for buy) or insufficient holdings (for sell)
 
-- [ ] **FE-54** Add `<TradeButton />` to `StockCard` when `variant="detail"` and user has paper trading enabled.
+- [x] **FE-54** Add `<TradeButton />` to `StockCard` when `variant="detail"` and user has paper trading enabled.
 
-- [ ] **FE-55** Build `app/paper-trading/page.tsx`:
+- [x] **FE-55** Build `app/paper-trading/page.tsx`:
   - `<PaperPortfolioSummary />` at top
   - `<HoldingsTable />` filtered to `is_paper=true`
   - `<TradeHistory />` below

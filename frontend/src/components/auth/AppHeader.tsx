@@ -8,6 +8,8 @@ export default function AppHeader() {
   const { user, profile } = useUserStore();
 
   async function handleLogout() {
+    // Clear zustand store immediately for instant UI feedback
+    useUserStore.getState().logout();
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/";
