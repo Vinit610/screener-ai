@@ -40,7 +40,7 @@ export default function PortfolioPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const resp = await fetch(`${getBackendUrl()}/api/portfolio`, {
+      const resp = await fetch(`${getBackendUrl()}/api/portfolio/`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) throw new Error("Failed to fetch portfolio");
