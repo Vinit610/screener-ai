@@ -5,12 +5,14 @@ import type { UserProfile, InvestmentStyle } from '@/types'
 export interface UserState {
   user: User | null
   profile: UserProfile | null
+  accessToken: string | null
   isLoading: boolean
   error: string | null
 
   // Actions
   setUser: (user: User | null) => void
   setProfile: (profile: UserProfile | null) => void
+  setAccessToken: (token: string | null) => void
   updateProfile: (updates: Partial<UserProfile>) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -21,12 +23,15 @@ export interface UserState {
 export const useUserStore = create<UserState>((set, get) => ({
   user: null,
   profile: null,
+  accessToken: null,
   isLoading: false,
   error: null,
 
   setUser: (user) => set({ user }),
 
   setProfile: (profile) => set({ profile }),
+
+  setAccessToken: (token) => set({ accessToken: token }),
 
   updateProfile: (updates) => set((state) => ({
     profile: state.profile ? { ...state.profile, ...updates } : null
@@ -39,6 +44,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   logout: () => set({
     user: null,
     profile: null,
+    accessToken: null,
     error: null
   }),
 

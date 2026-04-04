@@ -9,7 +9,7 @@ export default function AuthProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { setUser, setProfile, setLoading, logout } = useUserStore();
+  const { setUser, setProfile, setAccessToken, setLoading, logout } = useUserStore();
 
   useEffect(() => {
     const supabase = createClient();
@@ -28,6 +28,7 @@ export default function AuthProvider({
         session?.user
       ) {
         setUser(session.user);
+        setAccessToken(session.access_token);
         const { data: profile } = await supabase
           .from("user_profiles")
           .select("*")
@@ -38,7 +39,7 @@ export default function AuthProvider({
           setProfile(profile);
         }
       } else if (event === "SIGNED_OUT") {
-        logout();
+        logout();  // clears user, profile, and accessToken
       }
 
       // Loading is done after the first event (INITIAL_SESSION)
@@ -48,7 +49,7 @@ export default function AuthProvider({
     return () => {
       subscription.unsubscribe();
     };
-  }, [setUser, setProfile, setLoading, logout]);
+  }, [setUser, setProfile, setAccessToken, setLoading, logout]);
 
   return <>{children}</>;
 }

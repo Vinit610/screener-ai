@@ -8,7 +8,6 @@ import NewsFeed from "@/components/stock/NewsFeed";
 import TradeButton from "@/components/portfolio/TradeButton";
 import { useUserStore } from "@/store/userStore";
 import { getBackendUrl } from "@/lib/api";
-import { createClient } from "@/lib/supabase/client";
 
 interface StockDetailClientProps {
   data: {
@@ -63,27 +62,15 @@ export default function StockDetailClient({
   data,
   symbol,
 }: StockDetailClientProps) {
-  const { user } = useUserStore();
-  const [token, setToken] = useState<string | null>(null);
+  const { user, accessToken } = useUserStore();
   const [cashBalance, setCashBalance] = useState(1000000);
   const [heldQuantity, setHeldQuantity] = useState(0);
 
-  useEffect(() => {
-    async function init() {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token) setToken(session.access_token);
-    }
-    init();
-  }, []);
-
   const fetchPaperInfo = useCallback(async () => {
-    if (!token) return;
+    if (!accessToken) return;
     try {
       const resp = await fetch(`${getBackendUrl()}/api/portfolio/paper`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) return;
       const json = await resp.json();
@@ -95,11 +82,11 @@ export default function StockDetailClient({
     } catch {
       // silently fail
     }
-  }, [token, symbol]);
+  }, [accessToken, symbol]);
 
   useEffect(() => {
-    if (token) fetchPaperInfo();
-  }, [token, fetchPaperInfo]);
+    if (accessToken) fetchPaperInfo();
+  }, [accessToken, fetchPaperInfo]);
 
   const currentPrice = data.latest_price?.close ?? null;
 
@@ -150,14 +137,14 @@ export default function StockDetailClient({
         >
           Open in Screener →
         </a>
-        {user && token && (
+        {user && accessToken && (
           <TradeButton
             symbol={symbol.toUpperCase()}
             currentPrice={currentPrice}
             cashBalance={cashBalance}
             heldQuantity={heldQuantity}
             backendUrl={getBackendUrl()}
-            token={token}
+            token={accessToken}
             onTradeComplete={fetchPaperInfo}
           />
         )}

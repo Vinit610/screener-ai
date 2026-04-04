@@ -715,6 +715,10 @@ python-dotenv==1.2.2 \
     # via
     #   backend
     #   pydantic-settings
+python-multipart==0.0.22 \
+    --hash=sha256:2b2cd894c83d21bf49d702499531c7bafd057d730c201782048f7945d82de155 \
+    --hash=sha256:7340bef99a7e0032613f56dc36027b959fd3b30a787ed62d310e951f7c3a3a58
+    # via backend
 realtime==2.28.3 \
     --hash=sha256:5cc83a6217874426799d8bf74e96d904ac6fa77c39fa8982fa99287947eb2cbf \
     --hash=sha256:efe484d6d39024c7e00ef70f70be600142e9407e5d802de8c96e86e014ce3b36

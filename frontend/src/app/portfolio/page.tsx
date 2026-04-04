@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useUserStore } from "@/store/userStore";
 import { getBackendUrl } from "@/lib/api";
-import { createClient } from "@/lib/supabase/client";
 import PnLSummary from "@/components/portfolio/PnLSummary";
 import HoldingsTable from "@/components/portfolio/HoldingsTable";
 import CSVUploader from "@/components/portfolio/CSVUploader";
@@ -24,11 +23,10 @@ interface AddHoldingForm {
 }
 
 export default function PortfolioPage() {
-  const { user } = useUserStore();
+  const { user, accessToken } = useUserStore();
   const [data, setData] = useState<PortfolioData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<AddHoldingForm>({
     symbol: "",
@@ -37,24 +35,13 @@ export default function PortfolioPage() {
   });
   const [isAdding, setIsAdding] = useState(false);
 
-  useEffect(() => {
-    async function getToken() {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token) setToken(session.access_token);
-    }
-    getToken();
-  }, []);
-
   const fetchPortfolio = useCallback(async () => {
-    if (!token) return;
+    if (!accessToken) return;
     setIsLoading(true);
     setError(null);
     try {
       const resp = await fetch(`${getBackendUrl()}/api/portfolio`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) throw new Error("Failed to fetch portfolio");
       const json: PortfolioData = await resp.json();
@@ -64,22 +51,22 @@ export default function PortfolioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [accessToken]);
 
   useEffect(() => {
-    if (token) fetchPortfolio();
-  }, [token, fetchPortfolio]);
+    if (accessToken) fetchPortfolio();
+  }, [accessToken, fetchPortfolio]);
 
   async function handleAddHolding(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) return;
+    if (!accessToken) return;
     setIsAdding(true);
     try {
       const resp = await fetch(`${getBackendUrl()}/api/portfolio/holding`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           symbol: addForm.symbol.toUpperCase(),
@@ -153,11 +140,11 @@ export default function PortfolioPage() {
             <p className="mb-6 text-sm text-muted">
               Upload a broker CSV file or add holdings manually.
             </p>
-            {token && (
+            {accessToken && (
               <CSVUploader
                 onUploadSuccess={fetchPortfolio}
                 backendUrl={getBackendUrl()}
-                token={token}
+                token={accessToken}
               />
             )}
             <div className="mt-4">

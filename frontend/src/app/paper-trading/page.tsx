@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useUserStore } from "@/store/userStore";
 import { getBackendUrl } from "@/lib/api";
-import { createClient } from "@/lib/supabase/client";
 import PaperPortfolioSummary from "@/components/portfolio/PaperPortfolioSummary";
 import HoldingsTable from "@/components/portfolio/HoldingsTable";
 import TradeHistory from "@/components/portfolio/TradeHistory";
@@ -30,32 +29,20 @@ interface PaperPortfolioData {
 }
 
 export default function PaperTradingPage() {
-  const { user } = useUserStore();
+  const { user, accessToken } = useUserStore();
   const [data, setData] = useState<PaperPortfolioData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  useEffect(() => {
-    async function getToken() {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token) setToken(session.access_token);
-    }
-    getToken();
-  }, []);
-
   const fetchPaper = useCallback(async () => {
-    if (!token) return;
+    if (!accessToken) return;
     setIsLoading(true);
     setError(null);
     try {
       const resp = await fetch(`${getBackendUrl()}/api/portfolio/paper`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) throw new Error("Failed to fetch paper portfolio");
       const json: PaperPortfolioData = await resp.json();
@@ -67,21 +54,21 @@ export default function PaperTradingPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [accessToken]);
 
   useEffect(() => {
-    if (token) fetchPaper();
-  }, [token, fetchPaper]);
+    if (accessToken) fetchPaper();
+  }, [accessToken, fetchPaper]);
 
   async function handleReset() {
-    if (!token) return;
+    if (!accessToken) return;
     setIsResetting(true);
     try {
       const resp = await fetch(
         `${getBackendUrl()}/api/portfolio/paper/reset`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${accessToken}` },
         }
       );
       if (!resp.ok) throw new Error("Failed to reset");

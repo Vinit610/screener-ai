@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useUserStore } from "@/store/userStore";
-import { createClient } from "@/lib/supabase/client";
 import type { InvestmentStyle } from "@/types";
 
 const STYLES: {
@@ -42,7 +41,7 @@ export default function OnboardingPage() {
   const [selected, setSelected] = useState<InvestmentStyle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { completeOnboarding } = useUserStore();
+  const { accessToken, completeOnboarding } = useUserStore();
 
   async function handleSubmit() {
     if (!selected) return;
@@ -50,23 +49,18 @@ export default function OnboardingPage() {
     setError(null);
 
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
+      if (!accessToken) {
         window.location.href = "/auth/login";
         return;
       }
 
-      const { BACKEND_URL: backendUrl } = await import("@/lib/api");
+      const { getBackendUrl } = await import("@/lib/api");
 
-      const resp = await fetch(`${backendUrl}/api/auth/onboarding`, {
+      const resp = await fetch(`${getBackendUrl()}/api/auth/onboarding`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ investment_style: selected }),
       });
