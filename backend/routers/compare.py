@@ -48,7 +48,7 @@ def _fetch_stock_snapshot(symbol: str) -> dict:
         .maybe_single()
         .execute()
     )
-    stock["fundamentals"] = fund_resp.data
+    stock["fundamentals"] = fund_resp.data if fund_resp else None
 
     price_resp = (
         supabase.table("stock_prices")

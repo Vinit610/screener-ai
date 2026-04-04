@@ -105,7 +105,7 @@ def _get_latest_price(symbol: str) -> float | None:
         .maybe_single()
         .execute()
     )
-    if not stock_resp.data:
+    if not stock_resp or not stock_resp.data:
         return None
     stock_id = stock_resp.data["id"]
     price_resp = (
@@ -344,7 +344,7 @@ def _ensure_paper_portfolio(user_id: str) -> dict:
         .maybe_single()
         .execute()
     )
-    if resp.data:
+    if resp and resp.data:
         return resp.data
     ins = (
         supabase.table("paper_portfolio")
@@ -401,7 +401,7 @@ def paper_buy(
         .execute()
     )
 
-    if existing.data:
+    if existing and existing.data:
         old_qty = existing.data["quantity"]
         old_avg = existing.data["avg_buy_price"]
         new_qty = old_qty + body.quantity
@@ -455,8 +455,8 @@ def paper_sell(
         .maybe_single()
         .execute()
     )
-    if not existing.data or existing.data["quantity"] < body.quantity:
-        held = existing.data["quantity"] if existing.data else 0
+    if not existing or not existing.data or existing.data["quantity"] < body.quantity:
+        held = existing.data["quantity"] if (existing and existing.data) else 0
         raise HTTPException(
             400,
             f"Insufficient holdings. You hold {held} of {body.symbol.upper()}",
@@ -570,7 +570,7 @@ def reset_paper_portfolio(user_id: str = Depends(get_current_user)):
         .maybe_single()
         .execute()
     )
-    if existing.data:
+    if existing and existing.data:
         supabase.table("paper_portfolio").update(
             {"cash_balance": 1000000.00, "updated_at": "now()"}
         ).eq("user_id", user_id).execute()
