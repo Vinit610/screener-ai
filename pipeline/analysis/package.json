@@ -1,0 +1,13 @@
+{
+  "name": "screener-ai-analysis-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate_analyses.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "yahoo-finance2": "^3.14.0"
+  }
+}
