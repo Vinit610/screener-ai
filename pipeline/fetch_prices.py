@@ -139,11 +139,6 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
             net_margin = to_pct(info.get('profitMargins'))
             operating_margin = to_pct(info.get('operatingMargins'))
 
-            # Compute Graham Number: sqrt(22.5 * EPS * Book Value)
-            graham_number = None
-            if eps is not None and book_value is not None and eps > 0 and book_value > 0:
-                graham_number = round(math.sqrt(22.5 * eps * book_value), 2)
-
             stock_record = {
                 'symbol': clean_symbol(symbol),
                 'exchange': 'NSE',
@@ -168,7 +163,6 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 'net_profit_cr': net_profit_cr,
                 'net_margin': net_margin,
                 'operating_margin': operating_margin,
-                'graham_number': graham_number,
             }
 
             return {'stock': stock_record, 'fundamentals': fundamentals_record}
