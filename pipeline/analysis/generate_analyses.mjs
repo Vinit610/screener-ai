@@ -47,7 +47,9 @@ const yahooFinance = new YahooFinance();
 const LLM_API_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 // Rate limiting
-const DELAY_BETWEEN_STOCKS_MS = 2000; // 2s between stocks (yahoo + free LLM)
+// Groq llama-3.3-70b-versatile: 30 RPM (2 sec/request) + 1K RPD
+// Using 10000ms to safely account for network latency and retries
+const DELAY_BETWEEN_STOCKS_MS = 10000; // ~1.5 stocks/min (well under 30 RPM limit)
 const MAX_RETRIES = 2;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -189,7 +191,7 @@ async function generateForStock(stock) {
           "Authorization": `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "openai/gpt-oss-120b",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.7,
           max_tokens: 4096,
