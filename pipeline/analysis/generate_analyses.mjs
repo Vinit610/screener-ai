@@ -93,6 +93,9 @@ async function fetchYahooData(symbol) {
         "institutionOwnership",
         "majorHoldersBreakdown",
         "assetProfile",
+        "incomeStatementHistory",
+        "balanceSheetHistory",
+        "cashflowStatementHistory",
       ],
     }),
     yahooFinance.chart(yahooSymbol, {
@@ -101,10 +104,33 @@ async function fetchYahooData(symbol) {
     }).catch(() => null),
   ]);
 
-  // Note: Historical income/balance/cash statements removed from quoteSummary
-  // as they provide almost no data since Nov 2024. If needed, can fetch via
-  // fundamentalsTimeSeries with correct module names when API stabilizes.
-  const fundamentals = null;
+  // Extract all available fundamentals directly from Yahoo quote
+  const extractFundamentals = (q) => {
+    const sd = q.summaryDetail ?? {};
+    const ks = q.defaultKeyStatistics ?? {};
+    const fd = q.financialData ?? {};
+    return {
+      pe: sd.trailingPE ?? null,
+      pb: sd.priceToBook ?? null,
+      roe: fd.returnOnEquity ?? null,
+      roce: fd.returnonCapital ?? null,
+      debt_to_equity: fd.debtToEquity ?? null,
+      net_margin: fd.profitMargins ?? null,
+      operating_margin: fd.operatingMargins ?? null,
+      gross_margin: fd.grossMargins ?? null,
+      revenue_cr: fd.totalRevenue ? fd.totalRevenue / 1_00_00_000 : null,
+      net_profit_cr: fd.netIncomeToCommon ? fd.netIncomeToCommon / 1_00_00_000 : null,
+      eps: ks.trailingEps ?? null,
+      dividend_yield: sd.dividendYield ?? null,
+      book_value: ks.bookValue ?? null,
+      graham_number: null,
+      current_ratio: fd.currentRatio ?? null,
+      quick_ratio: fd.quickRatio ?? null,
+      asset_turnover: fd.totalRevenue && fd.totalAssets ? fd.totalRevenue / fd.totalAssets : null,
+    };
+  };
+
+  const fundamentals = extractFundamentals(quote);
 
   return {
     quote,
@@ -130,20 +156,29 @@ async function fetchPeers(stockId, sector) {
 
   if (!data?.length) return [];
 
-  // Fetch fundamentals for peers
+  // Fetch all fundamentals for peers for detailed comparison
   const peerIds = data.map((p) => p.id);
   const { data: fundData } = await supabase
     .from("stock_fundamentals")
-    .select("stock_id, pe, roe")
+    .select("stock_id, pe, pb, roe, roce, debt_to_equity, net_margin, operating_margin, revenue_cr, net_profit_cr, eps, dividend_yield, book_value")
     .in("stock_id", peerIds);
 
   const fundMap = Object.fromEntries((fundData || []).map((f) => [f.stock_id, f]));
 
   return data.map((p) => ({
     symbol: p.symbol,
+    market_cap_cr: p.market_cap_cr,
     pe: fundMap[p.id]?.pe ?? null,
-    roe: fundMap[p.id]?.roe != null ? fundMap[p.id].roe / 100 : null,
-    marketCap: (p.market_cap_cr ?? 0) * 1_00_00_000, // back to raw for formatting
+    pb: fundMap[p.id]?.pb ?? null,
+    roe: fundMap[p.id]?.roe ?? null,
+    roce: fundMap[p.id]?.roce ?? null,
+    debt_to_equity: fundMap[p.id]?.debt_to_equity ?? null,
+    net_margin: fundMap[p.id]?.net_margin ?? null,
+    operating_margin: fundMap[p.id]?.operating_margin ?? null,
+    revenue_cr: fundMap[p.id]?.revenue_cr ?? null,
+    eps: fundMap[p.id]?.eps ?? null,
+    dividend_yield: fundMap[p.id]?.dividend_yield ?? null,
+    book_value: fundMap[p.id]?.book_value ?? null,
   }));
 }
 

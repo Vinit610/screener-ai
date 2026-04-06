@@ -329,7 +329,13 @@ RULES:
 - Each section MUST have 3-4 findings with supporting_data referencing actual numbers from the data above.
 - Scores: 0-30 = poor, 31-50 = below average, 51-70 = average, 71-85 = good, 86-100 = excellent.
 - For key_investment_risks, a LOWER score means HIGHER risk (inverted — 20 = very risky, 80 = low risk).
-- vs_sector should reference the peer data provided.
+- vs_sector MUST reference specific actual metrics with precise numbers (e.g., "P/E 12x vs peer avg 18x", "Net Margin 15% vs sector avg 12%", "D/E 0.5x vs peer avg 0.8x").
+- vs_sector should explain BUSINESS implications, not just metric differences (e.g., "Lower leverage provides stability in downturns" or "Higher margins suggest stronger pricing power and competitive advantage").
+- Analyze margin trends: Compare Net Margin and Operating Margin. Indicate if expanding or contracting vs peers. What does this reveal about cost structure or pricing power?
+- Evaluate working capital efficiency: Current ratio, asset turnover, days receivable/payable trends. Is the company managing cash efficiently?
+- Assess capital allocation: Dividend payout ratio, capex intensity, retained earnings. How does management deploy capital?
+- Identify balance sheet quality: Debt trends, interest coverage ratios, asset composition. Is the balance sheet flexible or stressed?
+- Compare business durability: ROE consistency, ROCE vs cost of capital, economic moat indicators. Can this competitive advantage sustain?
 - All monetary values should be in INR Crores.
 - Be specific with numbers; do not say "strong" without citing the actual metric.
 - peer_comparison should include 2-4 peers from the sector peers data.
