@@ -8,7 +8,7 @@ import numpy as np
 import math
 from typing import List, Dict, Optional
 import logging
-from db import upsert_stocks, upsert_prices, get_stock_id
+from db import upsert_stocks, upsert_prices, upsert_fundamentals, get_stock_id
 from data_processor import clean_symbol
 import argparse
 from curl_cffi import requests
@@ -82,7 +82,10 @@ def load_symbols(file_path: str = 'nifty500.txt') -> List[str]:
         return [line.strip() for line in f if line.strip()]
 
 def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
-    """Get stock info from yfinance with exponential backoff retry logic."""
+    """Get stock info + fundamentals from yfinance with exponential backoff retry logic.
+
+    Returns a dict with 'stock' (for stocks table) and 'fundamentals' (for stock_fundamentals table).
+    """
     # Add jitter to delay to make requests look more natural
     jitter = random.uniform(-JITTER_RANGE, JITTER_RANGE)
     actual_delay = max(0.1, delay + jitter)
@@ -101,8 +104,47 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 # Rough conversion: 1 INR = 0.012 USD, so multiply by ~83 to get INR
                 market_cap_inr = market_cap_raw * 83
                 market_cap_cr = market_cap_inr / 10_000_000  # Convert to crores
-            
-            return {
+
+            def safe_num(val):
+                """Safely convert to float, return None for missing/NaN."""
+                if val is None:
+                    return None
+                try:
+                    f = float(val)
+                    return None if math.isnan(f) or math.isinf(f) else f
+                except (ValueError, TypeError):
+                    return None
+
+            def to_pct(val):
+                """Convert decimal ratio (e.g. 0.15) to percentage (15.0)."""
+                v = safe_num(val)
+                return round(v * 100, 2) if v is not None else None
+
+            def to_cr(val):
+                """Convert raw currency value to crores (INR)."""
+                v = safe_num(val)
+                return round(v / 1_00_00_000, 2) if v is not None else None
+
+            # Extract fundamentals from ticker.info
+            pe = safe_num(info.get('trailingPE'))
+            pb = safe_num(info.get('priceToBook'))
+            roe = to_pct(info.get('returnOnEquity'))
+            roce = to_pct(info.get('returnOnAssets'))  # closest proxy available
+            debt_to_equity = safe_num(info.get('debtToEquity'))
+            dividend_yield = to_pct(info.get('dividendYield'))
+            eps = safe_num(info.get('trailingEps'))
+            book_value = safe_num(info.get('bookValue'))
+            revenue_cr = to_cr(info.get('totalRevenue'))
+            net_profit_cr = to_cr(info.get('netIncomeToCommon'))
+            net_margin = to_pct(info.get('profitMargins'))
+            operating_margin = to_pct(info.get('operatingMargins'))
+
+            # Compute Graham Number: sqrt(22.5 * EPS * Book Value)
+            graham_number = None
+            if eps is not None and book_value is not None and eps > 0 and book_value > 0:
+                graham_number = round(math.sqrt(22.5 * eps * book_value), 2)
+
+            stock_record = {
                 'symbol': clean_symbol(symbol),
                 'exchange': 'NSE',
                 'is_active': True,
@@ -112,6 +154,24 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 'industry': info.get('industry', ''),
                 'market_cap_cr': round(market_cap_cr, 2) if market_cap_cr else None
             }
+
+            fundamentals_record = {
+                'pe': pe,
+                'pb': pb,
+                'roe': roe,
+                'roce': roce,
+                'debt_to_equity': debt_to_equity,
+                'dividend_yield': dividend_yield,
+                'eps': eps,
+                'book_value': book_value,
+                'revenue_cr': revenue_cr,
+                'net_profit_cr': net_profit_cr,
+                'net_margin': net_margin,
+                'operating_margin': operating_margin,
+                'graham_number': graham_number,
+            }
+
+            return {'stock': stock_record, 'fundamentals': fundamentals_record}
         except Exception as e:
             retry_count += 1
             error_msg = str(e)
@@ -132,14 +192,17 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 # Final failure
                 logger.warning(f"Failed to get info for {symbol} after {MAX_RETRIES} attempts: {error_msg}")
                 return {
-                    'symbol': clean_symbol(symbol),
-                    'exchange': 'NSE',
-                    'is_active': True,
-                    'nse_listed': True,
-                    'name': '',
-                    'sector': '',
-                    'industry': '',
-                    'market_cap_cr': None
+                    'stock': {
+                        'symbol': clean_symbol(symbol),
+                        'exchange': 'NSE',
+                        'is_active': True,
+                        'nse_listed': True,
+                        'name': '',
+                        'sector': '',
+                        'industry': '',
+                        'market_cap_cr': None
+                    },
+                    'fundamentals': None
                 }
 
 def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, info_chunk_size: int = 10) -> None:
@@ -149,15 +212,19 @@ def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, i
     failed_symbols = []
 
     # First, ensure all stocks exist - process info in chunks
-    logger.info(f"Fetching stock info for {len(symbols)} symbols in chunks of {info_chunk_size}...")
+    logger.info(f"Fetching stock info + fundamentals for {len(symbols)} symbols in chunks of {info_chunk_size}...")
     stock_records = []
+    fundamentals_map = {}  # symbol -> fundamentals dict
     
     for chunk_idx in range(0, len(symbols), info_chunk_size):
         chunk = symbols[chunk_idx:chunk_idx + info_chunk_size]
         logger.info(f"Processing info chunk {chunk_idx // info_chunk_size + 1}/{(len(symbols) - 1) // info_chunk_size + 1}: {chunk[:3]}...")
         
         for sym in chunk:
-            stock_records.append(get_stock_info(sym))
+            result = get_stock_info(sym)
+            stock_records.append(result['stock'])
+            if result['fundamentals'] is not None:
+                fundamentals_map[clean_symbol(sym)] = result['fundamentals']
         
         # Delay between chunks to avoid rate limiting
         if chunk_idx + info_chunk_size < len(symbols):
@@ -168,6 +235,18 @@ def fetch_prices(symbols: List[str], period: str = "5d", batch_size: int = 50, i
     
     upsert_stocks(stock_records)
     logger.info(f"Upserted {len(stock_records)} stock records")
+
+    # Upsert fundamentals (need stock_id for each)
+    fund_records = []
+    for sym, fund_data in fundamentals_map.items():
+        stock_id = get_stock_id(sym)
+        if stock_id:
+            fund_records.append({'stock_id': stock_id, **fund_data})
+    if fund_records:
+        upsert_fundamentals(fund_records)
+        logger.info(f"Upserted fundamentals for {len(fund_records)} stocks")
+    else:
+        logger.warning("No fundamentals to upsert")
 
     # Now fetch prices in batches
     logger.info(f"Fetching prices for {len(symbols)} symbols (batch size: {batch_size})...")

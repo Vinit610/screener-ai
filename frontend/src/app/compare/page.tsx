@@ -55,6 +55,27 @@ export default function ComparePage() {
         );
       }
       const data = await res.json();
+
+      // For stock comparisons, enrich with live fundamentals from Yahoo Finance
+      if (mode === "stocks" && data.instrument_a && data.instrument_b) {
+        const [liveA, liveB] = await Promise.all([
+          fetch(`/api/stock/${encodeURIComponent(inputA.trim().toUpperCase())}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+          fetch(`/api/stock/${encodeURIComponent(inputB.trim().toUpperCase())}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ]);
+        if (liveA?.fundamentals) {
+          data.instrument_a.fundamentals = liveA.fundamentals;
+          if (liveA.market_cap_cr != null) data.instrument_a.market_cap_cr = liveA.market_cap_cr;
+        }
+        if (liveB?.fundamentals) {
+          data.instrument_b.fundamentals = liveB.fundamentals;
+          if (liveB.market_cap_cr != null) data.instrument_b.market_cap_cr = liveB.market_cap_cr;
+        }
+      }
+
       setComparisonData(data);
       setLoading(false);
 

@@ -8,6 +8,22 @@ import NewsFeed from "@/components/stock/NewsFeed";
 import TradeButton from "@/components/portfolio/TradeButton";
 import { useUserStore } from "@/store/userStore";
 import { getBackendUrl } from "@/lib/api";
+import { Skeleton } from "@/components/ui/Skeleton";
+
+interface FundamentalsData {
+  pe?: number | null;
+  pb?: number | null;
+  roe?: number | null;
+  roce?: number | null;
+  debt_to_equity?: number | null;
+  net_margin?: number | null;
+  revenue_cr?: number | null;
+  net_profit_cr?: number | null;
+  eps?: number | null;
+  book_value?: number | null;
+  graham_number?: number | null;
+  dividend_yield?: number | null;
+}
 
 interface StockDetailClientProps {
   data: {
@@ -16,20 +32,7 @@ interface StockDetailClientProps {
     name: string;
     sector: string | null;
     market_cap_cr: number | null;
-    fundamentals?: {
-      pe?: number | null;
-      pb?: number | null;
-      roe?: number | null;
-      roce?: number | null;
-      debt_to_equity?: number | null;
-      net_margin?: number | null;
-      revenue_cr?: number | null;
-      net_profit_cr?: number | null;
-      eps?: number | null;
-      book_value?: number | null;
-      graham_number?: number | null;
-      dividend_yield?: number | null;
-    } | null;
+    fundamentals?: FundamentalsData | null;
     latest_price?: {
       date: string;
       close: number;
@@ -66,6 +69,30 @@ export default function StockDetailClient({
   const [cashBalance, setCashBalance] = useState(1000000);
   const [heldQuantity, setHeldQuantity] = useState(0);
 
+  // Live fundamentals from Yahoo Finance
+  const [liveFundamentals, setLiveFundamentals] = useState<FundamentalsData | null>(null);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [liveMarketCap, setLiveMarketCap] = useState<number | null>(null);
+  const [fundLoading, setFundLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchLive() {
+      try {
+        const res = await fetch(`/api/stock/${encodeURIComponent(symbol)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        setLiveFundamentals(json.fundamentals ?? null);
+        setLivePrice(json.current_price ?? null);
+        setLiveMarketCap(json.market_cap_cr ?? null);
+      } catch {
+        // Fall back to DB data — liveFundamentals stays null
+      } finally {
+        setFundLoading(false);
+      }
+    }
+    fetchLive();
+  }, [symbol]);
+
   const fetchPaperInfo = useCallback(async () => {
     if (!accessToken) return;
     try {
@@ -88,13 +115,16 @@ export default function StockDetailClient({
     if (accessToken) fetchPaperInfo();
   }, [accessToken, fetchPaperInfo]);
 
-  const currentPrice = data.latest_price?.close ?? null;
+  // Use live data when available, fall back to DB data
+  const fundamentals = liveFundamentals ?? data.fundamentals ?? null;
+  const currentPrice = livePrice ?? data.latest_price?.close ?? null;
+  const marketCap = liveMarketCap ?? data.market_cap_cr;
 
   const screenerUrl = new URL("/screener", window.location.origin);
   if (data.sector) {
     screenerUrl.searchParams.set("sector", data.sector);
   }
-  const mcapCategory = getMarketCapCategory(data.market_cap_cr);
+  const mcapCategory = getMarketCapCategory(marketCap);
   if (mcapCategory) {
     screenerUrl.searchParams.set("market_cap_category", mcapCategory);
   }
@@ -108,21 +138,21 @@ export default function StockDetailClient({
           symbol: data.symbol,
           name: data.name,
           sector: data.sector,
-          market_cap_cr: data.market_cap_cr,
-          fundamentals: data.fundamentals
+          market_cap_cr: marketCap,
+          fundamentals: fundamentals
             ? {
-                pe: data.fundamentals.pe ?? null,
-                pb: data.fundamentals.pb ?? null,
-                roe: data.fundamentals.roe ?? null,
-                roce: data.fundamentals.roce ?? null,
-                debt_to_equity: data.fundamentals.debt_to_equity ?? null,
-                net_margin: data.fundamentals.net_margin ?? null,
-                dividend_yield: data.fundamentals.dividend_yield ?? null,
-                eps: data.fundamentals.eps ?? null,
-                revenue_cr: data.fundamentals.revenue_cr ?? null,
-                net_profit_cr: data.fundamentals.net_profit_cr ?? null,
-                book_value: data.fundamentals.book_value ?? null,
-                graham_number: data.fundamentals.graham_number ?? null,
+                pe: fundamentals.pe ?? null,
+                pb: fundamentals.pb ?? null,
+                roe: fundamentals.roe ?? null,
+                roce: fundamentals.roce ?? null,
+                debt_to_equity: fundamentals.debt_to_equity ?? null,
+                net_margin: fundamentals.net_margin ?? null,
+                dividend_yield: fundamentals.dividend_yield ?? null,
+                eps: fundamentals.eps ?? null,
+                revenue_cr: fundamentals.revenue_cr ?? null,
+                net_profit_cr: fundamentals.net_profit_cr ?? null,
+                book_value: fundamentals.book_value ?? null,
+                graham_number: fundamentals.graham_number ?? null,
               }
             : null,
         }}
@@ -150,16 +180,31 @@ export default function StockDetailClient({
         )}
       </div>
 
-      {/* Price chart */}
+      {/* Price chart — live from Yahoo Finance */}
       <PriceChart
         prices={data.price_history ?? []}
         symbol={symbol}
       />
 
-      {/* Fundamentals grid */}
+      {/* Fundamentals grid — live from Yahoo Finance */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-white">Fundamentals</h2>
-        <FundamentalsGrid fundamentals={data.fundamentals ?? null} />
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-white">Fundamentals</h2>
+          {liveFundamentals && (
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] text-accent">
+              Live
+            </span>
+          )}
+        </div>
+        {fundLoading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <FundamentalsGrid fundamentals={fundamentals} />
+        )}
       </div>
 
       {/* News feed */}

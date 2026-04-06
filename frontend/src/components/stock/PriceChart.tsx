@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   AreaChart,
   Area,
@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 interface PricePoint {
   date: string;
@@ -20,24 +21,20 @@ interface PricePoint {
 }
 
 interface PriceChartProps {
-  prices: PricePoint[];
+  /** Pre-loaded prices from DB (SSR fallback). Ignored once live data loads. */
+  prices?: PricePoint[];
   symbol: string;
 }
 
-type TimeRange = "1M" | "3M" | "6M" | "1Y" | "3Y" | "5Y" | "MAX";
+type TimeRange = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y" | "3Y" | "5Y" | "MAX";
 
-const RANGE_DAYS: Record<TimeRange, number | null> = {
-  "1M": 30,
-  "3M": 90,
-  "6M": 180,
-  "1Y": 365,
-  "3Y": 365 * 3,
-  "5Y": 365 * 5,
-  MAX: null,
-};
+const RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "6M", "1Y", "3Y", "5Y", "MAX"];
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, range: TimeRange): string {
   const d = new Date(dateStr);
+  if (range === "1D" || range === "1W") {
+    return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  }
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
@@ -45,29 +42,48 @@ function formatPrice(v: number): string {
   return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-export default function PriceChart({ prices, symbol }: PriceChartProps) {
+export default function PriceChart({ prices: ssrPrices, symbol }: PriceChartProps) {
   const [range, setRange] = useState<TimeRange>("1Y");
+  const [livePrices, setLivePrices] = useState<PricePoint[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredPrices = useMemo(() => {
-    if (!prices.length) return [];
-    const days = RANGE_DAYS[range];
-    if (days === null) return prices;
+  const fetchChart = useCallback(
+    async (r: TimeRange) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `/api/stock/${encodeURIComponent(symbol)}/chart?range=${r}`
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        setLivePrices(json.prices ?? []);
+      } catch {
+        setError("Failed to load chart data");
+        setLivePrices(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [symbol]
+  );
 
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    return prices.filter((p) => p.date >= cutoffStr);
-  }, [prices, range]);
+  useEffect(() => {
+    fetchChart(range);
+  }, [range, fetchChart]);
 
-  const startPrice = filteredPrices.length > 0 ? filteredPrices[0].close : 0;
+  const displayPrices = livePrices ?? ssrPrices ?? [];
+
+  const startPrice = displayPrices.length > 0 ? displayPrices[0].close : 0;
   const endPrice =
-    filteredPrices.length > 0
-      ? filteredPrices[filteredPrices.length - 1].close
+    displayPrices.length > 0
+      ? displayPrices[displayPrices.length - 1].close
       : 0;
   const isPositive = endPrice >= startPrice;
   const gradientId = `priceGradient-${range}-${isPositive ? "up" : "down"}`;
 
-  if (!prices.length) {
+  if (!loading && displayPrices.length === 0 && !error) {
     return (
       <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-muted">
         No price data available for {symbol}.
@@ -81,7 +97,7 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">Price Chart</h3>
-          {filteredPrices.length > 0 && (
+          {!loading && displayPrices.length > 0 && (
             <p className="mt-0.5 text-xs text-muted">
               {formatPrice(endPrice)}
               <span
@@ -90,13 +106,16 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
                 }`}
               >
                 {isPositive ? "+" : ""}
-                {((endPrice - startPrice) / startPrice * 100).toFixed(2)}%
+                {startPrice > 0
+                  ? (((endPrice - startPrice) / startPrice) * 100).toFixed(2)
+                  : "0.00"}
+                %
               </span>
             </p>
           )}
         </div>
         <div className="flex gap-1">
-          {(Object.keys(RANGE_DAYS) as TimeRange[]).map((r) => (
+          {RANGES.map((r) => (
             <button
               key={r}
               type="button"
@@ -113,65 +132,87 @@ export default function PriceChart({ prices, symbol }: PriceChartProps) {
         </div>
       </div>
 
+      {/* Loading */}
+      {loading && (
+        <Skeleton className="h-[280px] w-full rounded-lg" />
+      )}
+
+      {/* Error */}
+      {error && !loading && (
+        <div className="flex h-[280px] items-center justify-center text-xs text-danger">
+          {error}
+        </div>
+      )}
+
       {/* Chart */}
-      <ResponsiveContainer key={range} width="100%" height={280}>
-        <AreaChart data={filteredPrices}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="5%"
-                stopColor={isPositive ? "#22c55e" : "#ef4444"}
-                stopOpacity={0.3}
-              />
-              <stop
-                offset="95%"
-                stopColor={isPositive ? "#22c55e" : "#ef4444"}
-                stopOpacity={0}
-              />
-            </linearGradient>
-          </defs>
-          <XAxis
-            dataKey="date"
-            tickFormatter={formatDate}
-            tick={{ fill: "#888", fontSize: 10 }}
-            axisLine={{ stroke: "#222" }}
-            tickLine={false}
-            minTickGap={40}
-          />
-          <YAxis
-            tickFormatter={(v) => `₹${v}`}
-            tick={{ fill: "#888", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={60}
-            domain={["auto", "auto"]}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#111",
-              border: "1px solid #222",
-              borderRadius: "8px",
-              fontSize: "12px",
-            }}
-            labelFormatter={(label) => {
-              const d = new Date(label);
-              return d.toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              });
-            }}
-            formatter={(value) => [formatPrice(Number(value)), "Close"]}
-          />
-          <Area
-            type="monotone"
-            dataKey="close"
-            stroke={isPositive ? "#22c55e" : "#ef4444"}
-            strokeWidth={1.5}
-            fill={`url(#${gradientId})`}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      {!loading && !error && displayPrices.length > 0 && (
+        <ResponsiveContainer key={range} width="100%" height={280}>
+          <AreaChart data={displayPrices}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor={isPositive ? "#22c55e" : "#ef4444"}
+                  stopOpacity={0.3}
+                />
+                <stop
+                  offset="95%"
+                  stopColor={isPositive ? "#22c55e" : "#ef4444"}
+                  stopOpacity={0}
+                />
+              </linearGradient>
+            </defs>
+            <XAxis
+              dataKey="date"
+              tickFormatter={(d) => formatDate(d, range)}
+              tick={{ fill: "#888", fontSize: 10 }}
+              axisLine={{ stroke: "#222" }}
+              tickLine={false}
+              minTickGap={40}
+            />
+            <YAxis
+              tickFormatter={(v) => `₹${v}`}
+              tick={{ fill: "#888", fontSize: 10 }}
+              axisLine={false}
+              tickLine={false}
+              width={60}
+              domain={["auto", "auto"]}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#111",
+                border: "1px solid #222",
+                borderRadius: "8px",
+                fontSize: "12px",
+              }}
+              labelFormatter={(label) => {
+                const d = new Date(label);
+                if (range === "1D" || range === "1W") {
+                  return d.toLocaleString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                }
+                return d.toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                });
+              }}
+              formatter={(value) => [formatPrice(Number(value)), "Close"]}
+            />
+            <Area
+              type="monotone"
+              dataKey="close"
+              stroke={isPositive ? "#22c55e" : "#ef4444"}
+              strokeWidth={1.5}
+              fill={`url(#${gradientId})`}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
