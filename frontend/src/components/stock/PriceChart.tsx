@@ -35,6 +35,10 @@ function formatDate(dateStr: string, range: TimeRange): string {
   if (range === "1D" || range === "1W") {
     return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
   }
+  // Include year for multi-year ranges
+  if (range === "3Y" || range === "5Y" || range === "MAX") {
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
+  }
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 

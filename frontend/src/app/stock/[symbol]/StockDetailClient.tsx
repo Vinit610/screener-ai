@@ -132,7 +132,7 @@ export default function StockDetailClient({
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
-      {/* StockCard detail variant — triggers AI stream */}
+      {/* StockCard detail variant — shows key metrics without AI overview */}
       <StockCard
         stock={{
           id: data.id,
@@ -158,6 +158,7 @@ export default function StockDetailClient({
             : null,
         }}
         variant="detail"
+        showAI={false}
       />
 
       {/* Open in Screener + Paper Trade */}
