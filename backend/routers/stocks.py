@@ -224,6 +224,52 @@ def screen_stocks(
     return result
 
 
+# ── GET /{symbol}/analysis ────────────────────────────────────────────────────
+
+@router.get("/{symbol}/analysis")
+def get_stock_analysis(symbol: str):
+    """Return the latest AI-generated analysis for a stock."""
+    symbol = symbol.upper()
+    cache_key = f"stock_analysis:{symbol}"
+    cached = get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    # Look up the stock
+    stock_resp = (
+        supabase.table("stocks")
+        .select("id")
+        .eq("symbol", symbol)
+        .eq("is_active", True)
+        .maybe_single()
+        .execute()
+    )
+    if not stock_resp.data:
+        raise HTTPException(status_code=404, detail=f"Stock '{symbol}' not found")
+
+    stock_id = stock_resp.data["id"]
+
+    # Fetch the analysis
+    analysis_resp = (
+        supabase.table("stock_ai_analyses")
+        .select("analysis_json,overall_score,generated_at,prompt_version,"
+                "score_1d_ago,score_7d_ago,score_30d_ago")
+        .eq("stock_id", stock_id)
+        .maybe_single()
+        .execute()
+    )
+
+    if not analysis_resp.data:
+        raise HTTPException(status_code=404, detail=f"No AI analysis available for '{symbol}'")
+
+    result = {
+        "symbol": symbol,
+        **analysis_resp.data,
+    }
+    set_cache(cache_key, result, ex=3600)  # 1 hour cache
+    return result
+
+
 # ── GET /{symbol} ─────────────────────────────────────────────────────────────
 
 @router.get("/{symbol}", response_model=StockDetailResponse)

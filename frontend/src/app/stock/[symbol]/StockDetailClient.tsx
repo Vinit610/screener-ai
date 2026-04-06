@@ -5,6 +5,7 @@ import StockCard from "@/components/screener/StockCard";
 import FundamentalsGrid from "@/components/stock/FundamentalsGrid";
 import PriceChart from "@/components/stock/PriceChart";
 import NewsFeed from "@/components/stock/NewsFeed";
+import AIAnalysisPanel from "@/components/stock/AIAnalysisPanel";
 import TradeButton from "@/components/portfolio/TradeButton";
 import { useUserStore } from "@/store/userStore";
 import { getBackendUrl } from "@/lib/api";
@@ -206,6 +207,9 @@ export default function StockDetailClient({
           <FundamentalsGrid fundamentals={fundamentals} />
         )}
       </div>
+
+      {/* AI Analysis */}
+      <AIAnalysisPanel symbol={symbol} />
 
       {/* News feed */}
       <div>
