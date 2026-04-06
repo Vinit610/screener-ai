@@ -98,7 +98,7 @@ export default function StockCard({ stock, variant, showAI }: StockCardProps) {
         </div>
       )}
 
-      {/* AI explanation */}
+      {/* AI explanation
       {!isCompact && (
         <div className="mt-3 rounded bg-background/50 p-2 text-xs text-muted">
           {!isAuthenticated ? (
@@ -126,9 +126,9 @@ export default function StockCard({ stock, variant, showAI }: StockCardProps) {
       )}
 
       {/* Disclaimer */}
-      <p className="mt-2 text-[10px] text-muted/60">
+      {/* <p className="mt-2 text-[10px] text-muted/60">
         Educational insight only — not investment advice.
-      </p>
+      </p> */} 
     </div>
   );
 }
