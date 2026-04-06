@@ -125,45 +125,26 @@ export default function AIAnalysisPanel({ symbol }: AIAnalysisPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-white">AI Analysis</h2>
-        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
-          AI Generated
-        </span>
-      </div>
-
-      {/* Hero Score Card */}
-      <div className={clsx("rounded-xl border p-5", scoreBg(overall_score))}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="text-center">
-              <div className={clsx("text-4xl font-bold", scoreColor(overall_score))}>
-                {overall_score}
-              </div>
-              <div className={clsx("text-xs font-medium", scoreColor(overall_score))}>
-                {scoreLabel(overall_score)}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-foreground font-medium leading-snug">
-                {analysis.investment_thesis}
-              </p>
-              <div className="flex gap-3">
-                <ScoreDelta label="1d" prev={score_1d_ago} current={overall_score} />
-                <ScoreDelta label="7d" prev={score_7d_ago} current={overall_score} />
-                <ScoreDelta label="30d" prev={score_30d_ago} current={overall_score} />
-              </div>
-            </div>
-          </div>
-          <div className="text-[10px] text-muted shrink-0">
-            {new Date(generated_at).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-white">AI Analysis</h2>
+          <span className={clsx(
+            "shrink-0 rounded-full px-2 py-0.5 text-xs font-bold",
+            scoreBg(overall_score),
+            scoreColor(overall_score)
+          )}>
+            {overall_score}
+          </span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+            AI Generated
+          </span>
+        </div>
+        <div className="text-[10px] text-muted shrink-0">
+          {new Date(generated_at).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
         </div>
       </div>
 

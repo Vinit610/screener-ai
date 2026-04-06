@@ -42,6 +42,15 @@ function formatPrice(v: number): string {
   return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
+/** Calculate optimal minTickGap based on data density and range */
+function getMinTickGap(dataLength: number, range: TimeRange): number {
+  if (range === "1D" || range === "1W") return 20;
+  if (range === "1M" || range === "3M") return 30;
+  if (range === "6M" || range === "1Y") return 40;
+  if (dataLength > 200) return 50;
+  return 40;
+}
+
 export default function PriceChart({ prices: ssrPrices, symbol }: PriceChartProps) {
   const [range, setRange] = useState<TimeRange>("1Y");
   const [livePrices, setLivePrices] = useState<PricePoint[] | null>(null);
@@ -52,16 +61,21 @@ export default function PriceChart({ prices: ssrPrices, symbol }: PriceChartProp
     async (r: TimeRange) => {
       setLoading(true);
       setError(null);
+      setLivePrices(null); // Clear immediately to prevent stale data display
       try {
         const res = await fetch(
           `/api/stock/${encodeURIComponent(symbol)}/chart?range=${r}`
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        setLivePrices(json.prices ?? []);
-      } catch {
-        setError("Failed to load chart data");
-        setLivePrices(null);
+        // Only update if still the current range (prevents race conditions)
+        if (json.prices && Array.isArray(json.prices) && json.prices.length > 0) {
+          setLivePrices(json.prices);
+        } else {
+          setError("No data available for this time period");
+        }
+      } catch (err) {
+        setError("Failed to fetch chart data. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -73,7 +87,8 @@ export default function PriceChart({ prices: ssrPrices, symbol }: PriceChartProp
     fetchChart(range);
   }, [range, fetchChart]);
 
-  const displayPrices = livePrices ?? ssrPrices ?? [];
+  // Use fetched live data if available; SSR fallback only for initial 1Y view
+  const displayPrices = livePrices ?? (range === "1Y" ? ssrPrices : []) ?? [];
 
   const startPrice = displayPrices.length > 0 ? displayPrices[0].close : 0;
   const endPrice =
@@ -168,7 +183,7 @@ export default function PriceChart({ prices: ssrPrices, symbol }: PriceChartProp
               tick={{ fill: "#888", fontSize: 10 }}
               axisLine={{ stroke: "#222" }}
               tickLine={false}
-              minTickGap={40}
+              minTickGap={getMinTickGap(displayPrices.length, range)}
             />
             <YAxis
               tickFormatter={(v) => `₹${v}`}
