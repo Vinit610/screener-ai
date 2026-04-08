@@ -41,7 +41,7 @@ if (!GROQ_API_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 // Groq LLM API endpoint
 const LLM_API_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
@@ -76,8 +76,9 @@ async function fetchYahooData(symbol) {
   const yahooSymbol = `${symbol}.NS`;
 
   const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const period1 = oneYearAgo.toISOString().slice(0, 10);
   
-  const [quote, chart] = await Promise.all([
+  const promises = [
     yahooFinance.quoteSummary(yahooSymbol, {
       modules: [
         "summaryDetail",
@@ -93,16 +94,23 @@ async function fetchYahooData(symbol) {
         "institutionOwnership",
         "majorHoldersBreakdown",
         "assetProfile",
-        "incomeStatementHistory",
-        "balanceSheetHistory",
-        "cashflowStatementHistory",
       ],
     }),
     yahooFinance.chart(yahooSymbol, {
-      period1: oneYearAgo.toISOString().slice(0, 10),
+      period1,
       interval: "1d",
     }).catch(() => null),
-  ]);
+  ];
+
+  // Fetch historical financial data from fundamentalsTimeSeries
+  // Try to fetch each module separately with required parameters
+  for (const module of ["incomeStatement", "balanceSheet", "cashFlow"]) {
+    promises.push(
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module }).catch(() => null)
+    );
+  }
+
+  const [quote, chart, incomeStmts, balanceSheets, cashFlows] = await Promise.all(promises);
 
   // Extract all available fundamentals directly from Yahoo quote
   const extractFundamentals = (q) => {
@@ -130,12 +138,17 @@ async function fetchYahooData(symbol) {
     };
   };
 
-  const fundamentals = extractFundamentals(quote);
+  const fundData = extractFundamentals(quote);
 
   return {
     quote,
     financialData: quote.financialData,
-    fundamentals,
+    fundamentals: fundData,
+    timeSeries: {
+      incomeStatementHistory: incomeStmts?.timeSeries ?? [],
+      balanceSheetHistory: balanceSheets?.timeSeries ?? [],
+      cashflowStatementHistory: cashFlows?.timeSeries ?? [],
+    },
     chart,
   };
 }
@@ -212,8 +225,15 @@ async function generateForStock(stock) {
 
   const yahoo = await fetchYahooData(symbol);
   const peers = await fetchPeers(stockId, sector);
-  const dataContext = buildDataContext(symbol, yahoo.quote, yahoo.financialData, yahoo.fundamentals, yahoo.chart, peers);
+  const dataContext = buildDataContext(symbol, yahoo.quote, yahoo.financialData, yahoo.fundamentals, yahoo.chart, peers, yahoo.timeSeries);
   const prompt = buildAnalysisPrompt(dataContext);
+
+  const promptSize = JSON.stringify(prompt).length;
+  console.log(`  [${symbol}] Prompt size: ${(promptSize / 1024).toFixed(2)} KB`);
+  
+  if (promptSize > 25000) {
+    console.warn(`  [${symbol}] WARNING: Prompt exceeds 25KB (${(promptSize / 1024).toFixed(2)} KB) - may hit API limits`);
+  }
 
   console.log(`  [${symbol}] Calling Groq LLM API...`);
   let analysisJson;
@@ -226,9 +246,9 @@ async function generateForStock(stock) {
           "Authorization": `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "openai/gpt-oss-120b",
+          model: "meta-llama/llama-4-scout-17b-16e-instruct",
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.7,
+          temperature: 0.2,
           max_tokens: 4096,
         }),
       });
@@ -238,8 +258,21 @@ async function generateForStock(stock) {
       }
 
       const result = await response.json();
-      const text = result.choices?.[0]?.message?.content;
+      let text = result.choices?.[0]?.message?.content;
       if (!text) throw new Error("No content in API response");
+
+      // Remove markdown code fences if present
+      text = text
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+
+      // Try to extract JSON object in case there's surrounding text
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        text = jsonMatch[0];
+      }
 
       analysisJson = JSON.parse(text);
       break;
@@ -331,9 +364,9 @@ async function main() {
       failures.push(stock.symbol);
     }
     // Rate limit between stocks
-    if (stocks.indexOf(stock) < stocks.length - 1) {
+    // if (stocks.indexOf(stock) < stocks.length - 1) {
       await sleep(DELAY_BETWEEN_STOCKS_MS);
-    }
+    // }
   }
 
   console.log(`\n${"=".repeat(50)}`);

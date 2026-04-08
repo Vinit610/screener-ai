@@ -8,7 +8,7 @@ export const PROMPT_VERSION = "v1";
 /**
  * Build a text representation of the financial data for the LLM.
  */
-export function buildDataContext(symbol, quote, financialData, fundamentals, chart, peers) {
+export function buildDataContext(symbol, quote, financialData, fundamentals, chart, peers, timeSeries) {
   const sd = quote.summaryDetail ?? {};
   const ks = quote.defaultKeyStatistics ?? {};
   const fd = quote.financialData ?? {};
@@ -20,9 +20,20 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
   const toPct = (v) => { const n = safe(v); return n != null ? (n * 100).toFixed(2) + "%" : "N/A"; };
   const toCr = (v) => { const n = safe(v); return n != null ? (n / 1_00_00_000).toFixed(2) + " Cr" : "N/A"; };
   const fmt = (v, suffix = "") => { const n = safe(v); return n != null ? n.toFixed(2) + suffix : "N/A"; };
+  const safeText = (text) => {
+    if (!text) return "";
+    return String(text)
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, " ")
+      .replace(/\r/g, " ")
+      .replace(/\t/g, " ")
+      .replace(/  +/g, " ")
+      .trim();
+  };
 
-  let text = `=== ${symbol} — ${pr.shortName ?? pr.longName ?? symbol} ===\n`;
-  text += `Sector: ${profile.sector ?? "N/A"} | Industry: ${profile.industry ?? "N/A"}\n`;
+  let text = `=== ${symbol} — ${safeText(pr.shortName ?? pr.longName ?? symbol)} ===\n`;
+  text += `Sector: ${safeText(profile.sector ?? "N/A")} | Industry: ${safeText(profile.industry ?? "N/A")}\n`;
   text += `Market Cap: ${toCr(pr.marketCap)} | Exchange: NSE\n\n`;
 
   // Valuation
@@ -209,17 +220,70 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
     text += `\n`;
   }
 
-  // Asset profile (business description)
+  // Process fundamentalsTimeSeries data if available
+  if (timeSeries) {
+    // Income statement from timeSeries - show 2-3 periods max
+    if (timeSeries.incomeStatementHistory?.length) {
+      text += `── Income Statement (Time Series) ──\n`;
+      const incomeData = timeSeries.incomeStatementHistory.slice(0, 3);
+      for (const stmt of incomeData) {
+        const date = stmt.asOfDate ? new Date(stmt.asOfDate).toLocaleDateString("en-IN") : "N/A";
+        const revenue = stmt.totalRevenue ? (stmt.totalRevenue / 1_00_00_000).toFixed(2) : "N/A";
+        const netIncome = stmt.netIncome ? (stmt.netIncome / 1_00_00_000).toFixed(2) : "N/A";
+        const opMargin = stmt.totalRevenue && stmt.operatingIncome 
+          ? ((stmt.operatingIncome / stmt.totalRevenue) * 100).toFixed(2) 
+          : "N/A";
+        text += `  ${date}: Revenue ₹${revenue}Cr | Net Income ₹${netIncome}Cr | Op Margin ${opMargin}%\n`;
+      }
+      text += `\n`;
+    }
+
+    // Balance sheet from timeSeries - show 2-3 periods max
+    if (timeSeries.balanceSheetHistory?.length) {
+      text += `── Balance Sheet (Time Series) ──\n`;
+      const balanceData = timeSeries.balanceSheetHistory.slice(0, 3);
+      for (const bs of balanceData) {
+        const date = bs.asOfDate ? new Date(bs.asOfDate).toLocaleDateString("en-IN") : "N/A";
+        const assets = bs.totalAssets ? (bs.totalAssets / 1_00_00_000).toFixed(2) : "N/A";
+        const liab = bs.totalLiab ? (bs.totalLiab / 1_00_00_000).toFixed(2) : "N/A";
+        const equity = bs.totalStockholderEquity ? (bs.totalStockholderEquity / 1_00_00_000).toFixed(2) : "N/A";
+        const debtToEquity = bs.totalLiab && bs.totalStockholderEquity
+          ? (bs.totalLiab / bs.totalStockholderEquity).toFixed(2)
+          : "N/A";
+        text += `  ${date}: Assets ₹${assets}Cr | Liab ₹${liab}Cr | Equity ₹${equity}Cr | D/E ${debtToEquity}x\n`;
+      }
+      text += `\n`;
+    }
+
+    // Cash flow from timeSeries - show 2-3 periods max
+    if (timeSeries.cashflowStatementHistory?.length) {
+      text += `── Cash Flow (Time Series) ──\n`;
+      const cfData = timeSeries.cashflowStatementHistory.slice(0, 3);
+      for (const cf of cfData) {
+        const date = cf.asOfDate ? new Date(cf.asOfDate).toLocaleDateString("en-IN") : "N/A";
+        const opCash = cf.operatingCashFlow ? (cf.operatingCashFlow / 1_00_00_000).toFixed(2) : "N/A";
+        const freeCash = cf.freeCashFlow ? (cf.freeCashFlow / 1_00_00_000).toFixed(2) : "N/A";
+        const capEx = cf.capitalExpenditures ? (cf.capitalExpenditures / 1_00_00_000).toFixed(2) : "N/A";
+        text += `  ${date}: Op Cash ₹${opCash}Cr | Free Cash ₹${freeCash}Cr | CapEx ₹${capEx}Cr\n`;
+      }
+      text += `\n`;
+    }
+  }
+
+  // Asset profile (business description) - limit to 300 chars
   if (quote?.assetProfile?.businessSummary) {
     text += `── Business Summary ──\n`;
-    text += `${quote.assetProfile.businessSummary.substring(0, 500)}...\n\n`;
+    text += `${safeText(quote.assetProfile.businessSummary).substring(0, 300)}...\n\n`;
   }
 
   // Peer context
   if (peers?.length) {
-    text += `── Sector Peers ──\n`;
+    text += `── Sector Peers (Comprehensive Comparison) ──\n`;
     for (const p of peers.slice(0, 5)) {
-      text += `  ${p.symbol}: P/E ${fmt(p.pe)} | ROE ${toPct(p.roe)} | MktCap ${toCr(p.marketCap)}\n`;
+      text += `  ${p.symbol}:\n`;
+      text += `    P/E: ${fmt(p.pe)} | P/B: ${fmt(p.pb)} | ROE: ${toPct(p.roe)} | ROCE: ${toPct(p.roce)}\n`;
+      text += `    D/E: ${fmt(p.debt_to_equity)} | Net Margin: ${toPct(p.net_margin)}% | Op Margin: ${toPct(p.operating_margin)}%\n`;
+      text += `    Revenue: ${toCr(p.revenue_cr)} | EPS: ${fmt(p.eps)} | Div Yield: ${toPct(p.dividend_yield)}\n`;
     }
     text += `\n`;
   }
