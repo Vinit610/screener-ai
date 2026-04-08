@@ -5,7 +5,7 @@
  * Daily pipeline script that:
  *  1. Fetches all active stocks from Supabase
  *  2. For each stock, fetches live data from yahoo-finance2
- *  3. Calls Groq LLM for structured analysis JSON
+ *  3. Calls LLM for structured analysis JSON (Groq or Mistral)
  *  4. Upserts the result into stock_ai_analyses
  *
  * Usage:
@@ -17,7 +17,12 @@
  * Environment Variables:
  *   PIPELINE_SUPABASE_URL                 - Supabase project URL
  *   PIPELINE_SUPABASE_SERVICE_ROLE_KEY   - Supabase service role key
- *   GROQ_API_KEY                          - Groq API key from https://console.groq.com
+ *   LLM_PROVIDER                          - 'groq' (default) or 'mistral'
+ *   MISTRAL_API_KEY                       - Mistral API key from https://console.mistral.ai
+ *
+ * Examples:
+ *   # Using Mistral
+ *   LLM_PROVIDER=mistral MISTRAL_API_KEY=xxx node generate_analyses.mjs
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -28,28 +33,31 @@ import { buildDataContext, buildAnalysisPrompt, PROMPT_VERSION } from "./prompts
 
 const SUPABASE_URL = process.env.PIPELINE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.PIPELINE_SUPABASE_SERVICE_ROLE_KEY;
+const LLM_PROVIDER = (process.env.LLM_PROVIDER || "groq").toLowerCase();
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Missing required env vars: PIPELINE_SUPABASE_URL, PIPELINE_SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
 }
 
-if (!GROQ_API_KEY) {
-  console.error("Missing required env var: GROQ_API_KEY");
+// Validate LLM provider and required keys
+let LLM_API_ENDPOINT, LLM_API_KEY, LLM_MODEL;
+if (!MISTRAL_API_KEY) {
+  console.error("Missing required env var for Mistral: MISTRAL_API_KEY (from https://console.mistral.ai)");
   process.exit(1);
 }
+LLM_API_ENDPOINT = "https://api.mistral.ai/v1/chat/completions";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
-// Groq LLM API endpoint
-const LLM_API_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-
 // Rate limiting
-// Groq llama-3.3-70b-versatile: 30 RPM (2 sec/request) + 1K RPD
-// Using 10000ms to safely account for network latency and retries
-const DELAY_BETWEEN_STOCKS_MS = 10000; // ~1.5 stocks/min (well under 30 RPM limit)
+// Groq: 30 RPM (2 sec/request) + 1K RPD
+// Mistral: 200 RPM + 10K RPD
+// Using 10000ms to safely account for network latency and retries (~1.5 stocks/min)
+const DELAY_BETWEEN_STOCKS_MS = 10000;
 const MAX_RETRIES = 2;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -235,7 +243,7 @@ async function generateForStock(stock) {
     console.warn(`  [${symbol}] WARNING: Prompt exceeds 25KB (${(promptSize / 1024).toFixed(2)} KB) - may hit API limits`);
   }
 
-  console.log(`  [${symbol}] Calling Groq LLM API...`);
+  console.log(`[${symbol}] Calling Mistral LLM API...`);
   let analysisJson;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -243,10 +251,10 @@ async function generateForStock(stock) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Authorization": `Bearer ${MISTRAL_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "meta-llama/llama-4-scout-17b-16e-instruct",
+          model: "mistral-large-2411",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.2,
           max_tokens: 4096,
