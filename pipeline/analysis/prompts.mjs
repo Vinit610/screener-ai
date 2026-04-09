@@ -1,14 +1,160 @@
 /**
  * Prompt template and data-context builder for AI stock analysis.
- * Prompt version: v1
+ * Prompt version: v2 - Sector-aware analysis with peer context
  */
 
-export const PROMPT_VERSION = "v1";
+export const PROMPT_VERSION = "v2";
+
+/**
+ * Sector-specific guidance to help LLM understand what metrics matter for different industries.
+ * Extensible framework - add more sectors as needed.
+ */
+export const SECTOR_GUIDANCE = {
+  "Financial Services": {
+    key_message: "Banks are inherently leveraged. High debt-to-equity is NORMAL and expected.",
+    focus_metrics: ["profitability (net margin trend)", "debt quality", "growth sustainability"],
+    cautions: ["Do NOT penalize high D/E ratios as financial distress", "Compare ROE/ROA only within banking peers", "Dividend yield is secondary to capital adequacy"],
+    interpretation_note: "Evaluate banks on profitability consistency, growth trajectory, and valuation relative to peers—not absolute debt levels.",
+  },
+  "IT": {
+    key_message: "IT services companies are capital-light with high-margin recurring revenue.",
+    focus_metrics: ["revenue growth", "operating margin stability", "return on equity", "valuation relative to growth"],
+    cautions: ["High debt/equity may be unusual—investigate reason", "Compare P/E to growth rate (PEG)", "Client concentration risk is critical"],
+    interpretation_note: "Focus on revenue growth sustainability, margin trends, and whether valuation is justified by growth rates.",
+  },
+  "Pharmaceuticals": {
+    key_message: "Pharma profitability is driven by R&D efficiency and pipeline strength.",
+    focus_metrics: ["revenue growth from exports", "net margin consistency", "dividend yield (mature cos)", "earnings stability"],
+    cautions: ["High R&D spend reduces margins but is necessary", "Patent cliffs can impact growth suddenly", "Regulatory approvals drive value"],
+    interpretation_note: "Evaluate based on margin trends, stability of earnings, and whether valuations reflect pipeline risks.",
+  },
+  "FMCG": {
+    key_message: "FMCG stocks are consumer staples with strong moats and predictable cash flows.",
+    focus_metrics: ["dividend yield", "profitability margins", "return on equity", "growth stability"],
+    cautions: ["Growth rates lower than other sectors is NORMAL", "High valuations justified by dividend + stability", "Margin compression from inflation is a key risk"],
+    interpretation_note: "FMCG attracts defensive investors. Evaluate on dividend sustainability, margin trends, and defensive characteristics.",
+  },
+  "Automobiles": {
+    key_message: "Auto stocks are cyclical and sensitive to industry capacity utilization and OEM growth.",
+    focus_metrics: ["revenue growth trends", "operating margins", "debt-to-equity", "return on assets"],
+    cautions: ["Cyclical industry—growth can reverse quickly", "EV transition creating winners and losers", "OEM order books are leading indicators"],
+    interpretation_note: "Evaluate on cycle position, cost structure, and positioning for EV transition.",
+  },
+  "Real Estate": {
+    key_message: "Real Estate stocks depend on land bank, launch pipeline, and execution.",
+    focus_metrics: ["revenue growth", "net margin", "debt levels", "project pipeline value"],
+    cautions: ["Land appreciation can be volatile", "Pre-sales provide forward revenue visibility", "High leverage is typical for sector"],
+    interpretation_note: "Evaluate on pre-sales growth, margin trends, and whether leverage is manageable by cash flow.",
+  },
+};
+
+/**
+ * Calculate how a stock ranks relative to its peers for a specific metric.
+ * Returns: "Top performer", "Above average", "Average", "Below average", or "Laggard"
+ */
+function rankStock(metric, stockValue, peerValues) {
+  if (stockValue == null) return "N/A";
+  const validPeers = peerValues.filter(v => v != null && Number.isFinite(v));
+  if (validPeers.length === 0) return "No peer data";
+  
+  const sorted = [...validPeers].sort((a, b) => a - b);
+  const percentile = validPeers.filter(v => v <= stockValue).length / validPeers.length;
+  
+  if (percentile >= 0.75) return "Top performer";
+  if (percentile >= 0.60) return "Above average";
+  if (percentile >= 0.40) return "Average";
+  if (percentile >= 0.25) return "Below average";
+  return "Laggard";
+}
+
+/**
+ * Calculate percentile rank (0-100) of stock among peers.
+ */
+function calculatePercentile(stockValue, peerValues) {
+  if (stockValue == null) return null;
+  const validPeers = peerValues.filter(v => v != null && Number.isFinite(v));
+  if (validPeers.length === 0) return null;
+  
+  const below = validPeers.filter(v => v <= stockValue).length;
+  return Math.round((below / validPeers.length) * 100);
+}
+
+/**
+ * Build comprehensive peer comparison context with rankings.
+ */
+function buildPeerContext(symbol, stock, peers) {
+  if (!peers || peers.length === 0) return "";
+  
+  // Collect peer metrics for comparison
+  const metrics = {
+    pe: [],
+    pb: [],
+    roe: [],
+    roce: [],
+    net_margin: [],
+    operating_margin: [],
+    dividend_yield: [],
+  };
+  
+  peers.forEach(p => {
+    metrics.pe.push(p.pe);
+    metrics.pb.push(p.pb);
+    metrics.roe.push(p.roe);
+    metrics.roce.push(p.roce);
+    metrics.net_margin.push(p.net_margin);
+    metrics.operating_margin.push(p.operating_margin);
+    metrics.dividend_yield.push(p.dividend_yield);
+  });
+  
+  // Calculate averages and stock's ranking
+  const peerAvg = (key) => {
+    const valid = metrics[key].filter(v => v != null && Number.isFinite(v));
+    return valid.length > 0 ? valid.reduce((a, b) => a + b) / valid.length : null;
+  };
+  
+  let context = `── Peer Relative Performance ──\n`;
+  context += `Comparing ${symbol} to ${peers.length} sector peers:\n\n`;
+  
+  // P/E Comparison
+  if (stock.pe) {
+    const avgPe = peerAvg('pe');
+    const rank = rankStock('P/E', stock.pe, metrics.pe);
+    const vs = avgPe ? (stock.pe > avgPe ? `Premium` : `Discount`) : '';
+    context += `P/E: ${stock.pe.toFixed(2)}x (${rank}) ${vs !== '' ? `(${vs} vs peer avg ${avgPe?.toFixed(2)}x)` : ''}\n`;
+  }
+  
+  // ROE Comparison (higher is better)
+  if (stock.roe) {
+    const avgRoe = peerAvg('roe');
+    const rank = rankStock('ROE', stock.roe, metrics.roe);
+    const vs = avgRoe ? (stock.roe > avgRoe ? `Higher` : `Lower`) : '';
+    context += `ROE: ${(stock.roe * 100).toFixed(2)}% (${rank}) ${vs !== '' ? `(${vs} than peer avg ${(avgRoe * 100).toFixed(2)}%)` : ''}\n`;
+  }
+  
+  // Net Margin Comparison
+  if (stock.net_margin) {
+    const avgMargin = peerAvg('net_margin');
+    const rank = rankStock('Net Margin', stock.net_margin, metrics.net_margin);
+    const vs = avgMargin ? (stock.net_margin > avgMargin ? `Higher` : `Lower`) : '';
+    context += `Net Margin: ${(stock.net_margin * 100).toFixed(2)}% (${rank}) ${vs !== '' ? `(${vs} than peer avg ${(avgMargin * 100).toFixed(2)}%)` : ''}\n`;
+  }
+  
+  // Dividend Yield Comparison
+  if (stock.dividend_yield) {
+    const avgDiv = peerAvg('dividend_yield');
+    const rank = rankStock('Dividend Yield', stock.dividend_yield, metrics.dividend_yield);
+    const vs = avgDiv ? (stock.dividend_yield > avgDiv ? `Above` : `Below`) : '';
+    context += `Dividend Yield: ${(stock.dividend_yield * 100).toFixed(2)}% (${rank}) ${vs !== '' ? `(${vs} peer avg ${(avgDiv * 100).toFixed(2)}%)` : ''}\n`;
+  }
+  
+  context += `\n`;
+  return context;
+}
 
 /**
  * Build a text representation of the financial data for the LLM.
  */
-export function buildDataContext(symbol, quote, financialData, fundamentals, chart, peers, timeSeries) {
+export function buildDataContext(symbol, quote, financialData, fundamentals, chart, peers, timeSeries, dataSource, impliedVolatility, sector) {
   const sd = quote.summaryDetail ?? {};
   const ks = quote.defaultKeyStatistics ?? {};
   const fd = quote.financialData ?? {};
@@ -34,7 +180,14 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
 
   let text = `=== ${symbol} — ${safeText(pr.shortName ?? pr.longName ?? symbol)} ===\n`;
   text += `Sector: ${safeText(profile.sector ?? "N/A")} | Industry: ${safeText(profile.industry ?? "N/A")}\n`;
-  text += `Market Cap: ${toCr(pr.marketCap)} | Exchange: NSE\n\n`;
+  
+  let exchangeInfo = "Exchange: NSE";
+  if (dataSource?.nse && dataSource?.bse) {
+    exchangeInfo = "Exchange: NSE + BSE (merged)";
+  } else if (dataSource?.bse) {
+    exchangeInfo = "Exchange: BSE";
+  }
+  text += `Market Cap: ${toCr(pr.marketCap)} | ${exchangeInfo}\n\n`;
 
   // Valuation
   text += `── Valuation ──\n`;
@@ -276,13 +429,95 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
     text += `${safeText(quote.assetProfile.businessSummary).substring(0, 300)}...\n\n`;
   }
 
-  // Peer context
+  // Analyst Sentiment & Target Price
+  if (quote?.recommendationTrend?.trend?.length) {
+    const latestRec = quote.recommendationTrend.trend[0];
+    const totalRecs = (latestRec.strongBuy || 0) + (latestRec.buy || 0) + (latestRec.hold || 0) + (latestRec.sell || 0) + (latestRec.strongSell || 0);
+    const bullishPct = totalRecs > 0 ? (((latestRec.strongBuy || 0) + (latestRec.buy || 0)) / totalRecs * 100).toFixed(1) : "N/A";
+    text += `── Analyst Sentiment ──\n`;
+    text += `  Strong Buy: ${latestRec.strongBuy || 0} | Buy: ${latestRec.buy || 0} | Hold: ${latestRec.hold || 0} | Sell: ${latestRec.sell || 0} | Strong Sell: ${latestRec.strongSell || 0}\n`;
+    text += `  Bullish Consensus: ${bullishPct}%\n`;
+    if (quote?.summaryDetail?.targetMeanPrice) {
+      text += `  Target Mean Price: ₹${fmt(quote.summaryDetail.targetMeanPrice)}\n`;
+    }
+    text += `\n`;
+  }
+
+  // Upcoming Events & Catalysts
+  if (quote?.calendarEvents) {
+    const events = [];
+    if (quote.calendarEvents.earnings?.length) {
+      const earningsDate = new Date(quote.calendarEvents.earnings[0].date).toLocaleDateString("en-IN");
+      events.push(`Earnings: ${earningsDate}`);
+    }
+    if (quote.calendarEvents.dividends?.length) {
+      const divDate = new Date(quote.calendarEvents.dividends[0].date).toLocaleDateString("en-IN");
+      events.push(`Dividend Ex-Date: ${divDate}`);
+    }
+    if (events.length) {
+      text += `── Upcoming Events ──\n`;
+      for (const evt of events) text += `  • ${evt}\n`;
+      text += `\n`;
+    }
+  }
+
+  // Bid-Ask Spread & Liquidity (from summaryDetail)
+  if (quote?.summaryDetail) {
+    const sd = quote.summaryDetail;
+    text += `── Liquidity & Volatility ──\n`;
+    if (sd.bid && sd.ask) {
+      const spread = ((sd.ask - sd.bid) / sd.bid * 100).toFixed(2);
+      text += `  Bid-Ask Spread: ${spread}%\n`;
+    }
+    if (sd.volume) text += `  Volume: ${(sd.volume / 1000000).toFixed(2)}M shares\n`;
+    if (sd.averageVolume) text += `  Avg Volume: ${(sd.averageVolume / 1000000).toFixed(2)}M shares\n`;
+    if (sd.beta) text += `  Beta: ${fmt(sd.beta)}\n`;
+    if (impliedVolatility) text += `  Implied Volatility: ${toPct(impliedVolatility)}\n`;
+    text += `\n`;
+  }
+
+  // Technical Indicators from Fundamentals
+  if (quote?.defaultKeyStatistics) {
+    const ks = quote.defaultKeyStatistics;
+    const currentPrice = quote?.price?.regularMarketPrice ?? pr?.currentPrice;
+    text += `── Technical Metrics ──\n`;
+    if (ks.fiftyTwoWeekHigh && ks.fiftyTwoWeekLow && currentPrice) {
+      const distance = ((currentPrice - ks.fiftyTwoWeekLow) / (ks.fiftyTwoWeekHigh - ks.fiftyTwoWeekLow) * 100).toFixed(1);
+      text += `  52-Week Range: ₹${fmt(ks.fiftyTwoWeekLow)} - ₹${fmt(ks.fiftyTwoWeekHigh)} (Current: ${distance}% of range)\n`;
+    }
+    if (ks.priceToBook) text += `  P/B Ratio: ${fmt(ks.priceToBook)}x\n`;
+    if (ks.pegRatio) text += `  PEG Ratio: ${fmt(ks.pegRatio)}\n`;
+    text += `\n`;
+  }
+
+  // Upgrade/Downgrade History
+  if (quote?.upgradeDowngradeHistory?.history?.length) {
+    text += `── Recent Analyst Actions ──\n`;
+    for (const action of quote.upgradeDowngradeHistory.history.slice(0, 3)) {
+      const date = new Date(action.epochGradeDate * 1000).toLocaleDateString("en-IN");
+      text += `  ${date}: ${action.firm} - ${action.action}\n`;
+    }
+    text += `\n`;
+  }
+
+  // Add peer ranking context
+  if (peers?.length) {
+    const stock = {
+      pe: sd.trailingPE,
+      roe: fd.returnOnEquity,
+      net_margin: fd.profitMargins,
+      dividend_yield: sd.dividendYield,
+    };
+    text += buildPeerContext(symbol, stock, peers);
+  }
+
+  // Peer context - detailed list
   if (peers?.length) {
     text += `── Sector Peers (Comprehensive Comparison) ──\n`;
     for (const p of peers.slice(0, 5)) {
       text += `  ${p.symbol}:\n`;
       text += `    P/E: ${fmt(p.pe)} | P/B: ${fmt(p.pb)} | ROE: ${toPct(p.roe)} | ROCE: ${toPct(p.roce)}\n`;
-      text += `    D/E: ${fmt(p.debt_to_equity)} | Net Margin: ${toPct(p.net_margin)}% | Op Margin: ${toPct(p.operating_margin)}%\n`;
+      text += `    D/E: ${fmt(p.debt_to_equity)} | Net Margin: ${toPct(p.net_margin)} | Op Margin: ${toPct(p.operating_margin)}\n`;
       text += `    Revenue: ${toCr(p.revenue_cr)} | EPS: ${fmt(p.eps)} | Div Yield: ${toPct(p.dividend_yield)}\n`;
     }
     text += `\n`;
@@ -292,21 +527,41 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
 }
 
 /**
- * The full analysis prompt sent to Gemini.
+ * The full analysis prompt sent to LLM.
  */
-export function buildAnalysisPrompt(dataContext) {
-  return `You are an expert Indian equity research analyst. Analyse the stock below and produce a comprehensive investment analysis in JSON format.
+export function buildAnalysisPrompt(dataContext, sector) {
+  // Add sector guidance if available
+  let sectorContext = '';
+  if (sector && SECTOR_GUIDANCE[sector]) {
+    const guidance = SECTOR_GUIDANCE[sector];
+    sectorContext = `
+
+[SECTOR ANALYSIS GUIDANCE: ${sector}]
+${guidance.key_message}
+
+Key metrics to focus on: ${guidance.focus_metrics.join(", ")}
+
+Important cautions:
+${guidance.cautions.map(c => `- ${c}`).join("\n")}
+
+Analysis approach: ${guidance.interpretation_note}
+`;
+  }
+
+  return `You are an expert Indian equity research analyst specializing in deep fundamental analysis. Analyse the stock below and produce a comprehensive investment analysis in JSON format.
+
+${sectorContext}
 
 ${dataContext}
 
 Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON):
 {
   "overall_score": <integer 0-100>,
-  "investment_thesis": "<one-sentence thesis>",
+  "investment_thesis": "<Comprehensive thesis>",
   "sections": {
     "business_model_moat": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
       ],
@@ -317,7 +572,7 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
     },
     "financial_health": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
       ],
@@ -328,7 +583,7 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
     },
     "profitability_growth": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
       ],
@@ -339,7 +594,7 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
     },
     "balance_sheet_quality": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
       ],
@@ -350,7 +605,7 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
     },
     "valuation_assessment": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
       ],
@@ -361,7 +616,7 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
     },
     "sector_macro_outlook": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
       ],
@@ -372,7 +627,7 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
     },
     "key_investment_risks": {
       "score": <integer 0-100>,
-      "headline": "<one-line summary>",
+      "headline": "<brief summary>",
       "findings": [
         { "finding": "<risk>", "supporting_data": "<evidence>", "implication": "<potential impact>" }
       ],
@@ -403,5 +658,6 @@ RULES:
 - All monetary values should be in INR Crores.
 - Be specific with numbers; do not say "strong" without citing the actual metric.
 - peer_comparison should include 2-4 peers from the sector peers data.
+- NO HALLUCINATIONS: If a specific peer metric is unavailable, use "N/A" rather than guessing.
 - Respond with ONLY the JSON object, no markdown, no explanation.`;
 }

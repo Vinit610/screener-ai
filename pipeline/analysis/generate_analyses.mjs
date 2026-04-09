@@ -78,87 +78,290 @@ function parseArgs() {
 }
 
 /**
- * Fetch comprehensive data from yahoo-finance2 for a single stock.
+ * Extract all available fundamentals directly from Yahoo quote
  */
-async function fetchYahooData(symbol) {
-  const yahooSymbol = `${symbol}.NS`;
+function extractFundamentals(q) {
+  const sd = q.summaryDetail ?? {};
+  const ks = q.defaultKeyStatistics ?? {};
+  const fd = q.financialData ?? {};
+  const rec = q.recommendationTrend ?? {};
+  const upgrades = q.upgradeDowngradeHistory ?? {};
+  const insider = q.insiderTransactions ?? {};
+  const calendar = q.calendarEvents ?? {};
 
-  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
-  const period1 = oneYearAgo.toISOString().slice(0, 10);
-  
-  const promises = [
-    yahooFinance.quoteSummary(yahooSymbol, {
-      modules: [
-        "summaryDetail",
-        "defaultKeyStatistics",
-        "financialData",
-        "price",
-        "summaryProfile",
-        "earningsTrend",
-        "earningsHistory",
-        "recommendationTrend",
-        "industryTrend",
-        "insiderTransactions",
-        "institutionOwnership",
-        "majorHoldersBreakdown",
-        "assetProfile",
-      ],
-    }),
-    yahooFinance.chart(yahooSymbol, {
-      period1,
-      interval: "1d",
-    }).catch(() => null),
-  ];
+  return {
+    // Valuation
+    pe: sd.trailingPE ?? null,
+    pb: sd.priceToBook ?? null,
+    peg: ks.pegRatio ?? null,
+    ps: sd.priceToSalesTrailing12Months ?? null,
+    ev_ebitda: ks.enterpriseToEbitda ?? null,
+    
+    // Profitability & Returns
+    roe: fd.returnOnEquity ?? null,
+    roa: fd.returnOnAssets ?? null,
+    roce: fd.returnonCapital ?? null,
+    net_margin: fd.profitMargins ?? null,
+    operating_margin: fd.operatingMargins ?? null,
+    gross_margin: fd.grossMargins ?? null,
+    
+    // Per Share Metrics
+    eps: ks.trailingEps ?? null,
+    forward_eps: ks.forwardEps ?? null,
+    book_value: ks.bookValue ?? null,
+    
+    // Financial Position
+    revenue_cr: fd.totalRevenue ? fd.totalRevenue / 1_00_00_000 : null,
+    net_profit_cr: fd.netIncomeToCommon ? fd.netIncomeToCommon / 1_00_00_000 : null,
+    debt_to_equity: fd.debtToEquity ?? null,
+    current_ratio: fd.currentRatio ?? null,
+    quick_ratio: fd.quickRatio ?? null,
+    cash_to_debt: fd.totalCash && fd.totalDebt ? fd.totalCash / fd.totalDebt : null,
+    
+    // Growth
+    revenue_growth: fd.revenueGrowth ?? null,
+    earnings_growth: fd.earningsGrowth ?? null,
+    free_cash_flow: fd.freeCashflow ? fd.freeCashflow / 1_00_00_000 : null,
+    operating_cash_flow: fd.operatingCashflow ? fd.operatingCashflow / 1_00_00_000 : null,
+    
+    // Dividends
+    dividend_yield: sd.dividendYield ?? null,
+    payout_ratio: sd.payoutRatio ?? null,
+    five_year_avg_dividend_yield: sd.fiveYearAvgDividendYield ?? null,
+    
+    // Analyst & Market Sentiment
+    target_price: sd.targetMeanPrice ?? null,
+    recommendation_key: rec.trend?.[0]?.strongBuy ? "Strong Buy" : 
+                        rec.trend?.[0]?.buy ? "Buy" :
+                        rec.trend?.[0]?.hold ? "Hold" :
+                        rec.trend?.[0]?.sell ? "Sell" :
+                        rec.trend?.[0]?.strongSell ? "Strong Sell" : null,
+    number_of_analysts: rec.trend?.[0] ? 
+      (rec.trend[0].strongBuy || 0) + (rec.trend[0].buy || 0) + (rec.trend[0].hold || 0) + 
+      (rec.trend[0].sell || 0) + (rec.trend[0].strongSell || 0) : null,
+    recent_upgrades: upgrades?.history?.slice(0, 3)?.length ?? 0,
+    
+    // Insider Activity
+    insider_transactions_count: insider?.transactions?.length ?? 0,
+    
+    // Calendar Events
+    next_earnings_date: calendar?.earnings?.[0]?.date ?? null,
+    next_dividend_date: calendar?.dividends?.[0]?.date ?? null,
+    
+    // Technical
+    fifty_two_week_high: sd.fiftyTwoWeekHigh ?? null,
+    fifty_two_week_low: sd.fiftyTwoWeekLow ?? null,
+    fifty_day_ma: sd.fiftyDayAverage ?? null,
+    two_hundred_day_ma: sd.twoHundredDayAverage ?? null,
+    beta: ks.beta ?? null,
+  };
+}
 
-  // Fetch historical financial data from fundamentalsTimeSeries
-  // Try to fetch each module separately with required parameters
-  for (const module of ["incomeStatement", "balanceSheet", "cashFlow"]) {
-    promises.push(
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module }).catch(() => null)
-    );
-  }
+/**
+ * Merge data from two exchanges, preferring primary (NSE) with fallback to secondary (BSE).
+ * Use primary for price/volume data (more liquid), merge fundamentals intelligently.
+ */
+function mergeExchangeData(primaryData, secondaryData) {
+  if (!secondaryData) return primaryData;
 
-  const [quote, chart, incomeStmts, balanceSheets, cashFlows] = await Promise.all(promises);
+  const primary = primaryData ?? {};
+  const secondary = secondaryData ?? {};
 
-  // Extract all available fundamentals directly from Yahoo quote
-  const extractFundamentals = (q) => {
-    const sd = q.summaryDetail ?? {};
-    const ks = q.defaultKeyStatistics ?? {};
-    const fd = q.financialData ?? {};
+  // Merge fundamentals: use primary values, fallback to secondary for missing fields
+  const mergeFundamentals = (primFund, secFund) => {
+    if (!secFund) return primFund;
+    const merged = { ...primFund };
+    Object.keys(primFund).forEach((key) => {
+      if (merged[key] === null && secFund[key] !== null) {
+        merged[key] = secFund[key];
+      }
+    });
+    return merged;
+  };
+
+  // For quote and financialData, use primary (more trusted), but add missing keys from secondary
+  const mergeQuote = (primQuote, secQuote) => {
+    if (!secQuote) return primQuote;
+    const merged = { ...primQuote };
+    const checkFields = ["summaryDetail", "defaultKeyStatistics", "financialData", "earningsTrend"];
+    checkFields.forEach((field) => {
+      if (!merged[field] || Object.keys(merged[field] || {}).length === 0) {
+        merged[field] = secQuote[field];
+      }
+    });
+    return merged;
+  };
+
+  // Merge timeSeries, preferring more data points
+  const mergeTimeSeries = (primTS, secTS) => {
+    if (!secTS) return primTS;
     return {
-      pe: sd.trailingPE ?? null,
-      pb: sd.priceToBook ?? null,
-      roe: fd.returnOnEquity ?? null,
-      roce: fd.returnonCapital ?? null,
-      debt_to_equity: fd.debtToEquity ?? null,
-      net_margin: fd.profitMargins ?? null,
-      operating_margin: fd.operatingMargins ?? null,
-      gross_margin: fd.grossMargins ?? null,
-      revenue_cr: fd.totalRevenue ? fd.totalRevenue / 1_00_00_000 : null,
-      net_profit_cr: fd.netIncomeToCommon ? fd.netIncomeToCommon / 1_00_00_000 : null,
-      eps: ks.trailingEps ?? null,
-      dividend_yield: sd.dividendYield ?? null,
-      book_value: ks.bookValue ?? null,
-      graham_number: null,
-      current_ratio: fd.currentRatio ?? null,
-      quick_ratio: fd.quickRatio ?? null,
-      asset_turnover: fd.totalRevenue && fd.totalAssets ? fd.totalRevenue / fd.totalAssets : null,
+      incomeStatementHistory: [
+        ...(primTS.incomeStatementHistory ?? []),
+        ...(secTS.incomeStatementHistory ?? []).filter(
+          (sec) =>
+            !(primTS.incomeStatementHistory ?? []).some((p) => p.asOfDate === sec.asOfDate)
+        ),
+      ],
+      balanceSheetHistory: [
+        ...(primTS.balanceSheetHistory ?? []),
+        ...(secTS.balanceSheetHistory ?? []).filter(
+          (sec) =>
+            !(primTS.balanceSheetHistory ?? []).some((p) => p.asOfDate === sec.asOfDate)
+        ),
+      ],
+      cashflowStatementHistory: [
+        ...(primTS.cashflowStatementHistory ?? []),
+        ...(secTS.cashflowStatementHistory ?? []).filter(
+          (sec) =>
+            !(primTS.cashflowStatementHistory ?? []).some((p) => p.asOfDate === sec.asOfDate)
+        ),
+      ],
     };
   };
 
-  const fundData = extractFundamentals(quote);
-
   return {
-    quote,
-    financialData: quote.financialData,
-    fundamentals: fundData,
-    timeSeries: {
-      incomeStatementHistory: incomeStmts?.timeSeries ?? [],
-      balanceSheetHistory: balanceSheets?.timeSeries ?? [],
-      cashflowStatementHistory: cashFlows?.timeSeries ?? [],
+    quote: mergeQuote(primary.quote, secondary.quote),
+    financialData: {
+      ...primary.financialData,
+      ...(secondary.financialData ?? {}),
     },
-    chart,
+    fundamentals: mergeFundamentals(primary.fundamentals, secondary.fundamentals),
+    timeSeries: mergeTimeSeries(primary.timeSeries, secondary.timeSeries),
+    chart: primary.chart,
+    impliedVolatility: primary.impliedVolatility ?? secondary.impliedVolatility,
+    dataSource: { nse: !!primary.quote, bse: !!secondary.quote },
   };
+}
+
+/**
+ * Fetch comprehensive data from yahoo-finance2 for a single stock.
+ * Fetches from both NSE (.NS) and BSE (.BO) exchanges and merges the data.
+ */
+async function fetchYahooData(symbol) {
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const period1 = oneYearAgo.toISOString().slice(0, 10);
+
+  /**
+   * Helper to fetch from a single exchange
+   */
+  async function fetchFromExchange(yahooSymbol) {
+    try {
+      // Build comprehensive request with all available modules to reduce N/A values
+      const promises = [
+        yahooFinance.quoteSummary(yahooSymbol, {
+          modules: [
+            // Valuation & Performance
+            "summaryDetail",
+            "defaultKeyStatistics",
+            "financialData",
+            "price",
+            
+            // Company Info
+            "summaryProfile",
+            "assetProfile",
+            
+            // Analyst & Market Data
+            "earningsTrend",
+            "earningsHistory",
+            "recommendationTrend",
+            "upgradeDowngradeHistory",
+            "industryTrend",
+            
+            // Ownership & Activities
+            "insiderTransactions",
+            "insiderHolders",
+            "institutionOwnership",
+            "majorHoldersBreakdown",
+            "netSharePurchaseActivity",
+            
+            // Events & Filings
+            "calendarEvents",
+            "secFilings",
+            
+            // Financial statements
+            "incomeStatementHistory",
+            "incomeStatementHistoryQuarterly",
+            "balanceSheetHistory",
+            "balanceSheetHistoryQuarterly",
+            "cashflowStatementHistory",
+            "cashflowStatementHistoryQuarterly",
+          ],
+        }).catch(() => null),
+        
+        yahooFinance.chart(yahooSymbol, {
+          period1,
+          interval: "1d",
+        }).catch(() => null),
+        
+        // Try options data for volatility context
+        yahooFinance.options(yahooSymbol).catch(() => null),
+      ];
+
+      // Fetch historical financial data from fundamentalsTimeSeries (both annual & quarterly for more data)
+      for (const module of ["incomeStatement", "balanceSheet", "cashFlow"]) {
+        promises.push(
+          yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module }).catch(() => null)
+        );
+      }
+
+      const [quote, chart, options, incomeStmts, balanceSheets, cashFlows] = await Promise.all(promises);
+
+      if (!quote) return null;
+
+      // Extract volatility from options if available
+      let impliedVolatility = null;
+      if (options?.puts && options.puts.length > 0) {
+        const atmOption = options.puts.find(p => p.inTheMoney === false) || options.puts[0];
+        impliedVolatility = atmOption?.impliedVolatility;
+      } else if (options?.calls && options.calls.length > 0) {
+        const atmOption = options.calls.find(c => c.inTheMoney === false) || options.calls[0];
+        impliedVolatility = atmOption?.impliedVolatility;
+      }
+
+      return {
+        quote,
+        financialData: quote.financialData,
+        fundamentals: extractFundamentals(quote),
+        timeSeries: {
+          incomeStatementHistory: incomeStmts?.timeSeries ?? [],
+          balanceSheetHistory: balanceSheets?.timeSeries ?? [],
+          cashflowStatementHistory: cashFlows?.timeSeries ?? [],
+        },
+        chart,
+        impliedVolatility,
+      };
+    } catch (err) {
+      console.warn(`    Could not fetch from ${yahooSymbol}: ${err.message}`);
+      return null;
+    }
+  }
+
+  console.log(`  [${symbol}] Fetching from both NSE (.NS) and BSE (.BO)...`);
+
+  // Fetch from both exchanges in parallel
+  const [nsData, bseData] = await Promise.all([
+    fetchFromExchange(`${symbol}.NS`),
+    fetchFromExchange(`${symbol}.BO`),
+  ]);
+
+  if (!nsData && !bseData) {
+    throw new Error(`Could not fetch data from either NSE or BSE for ${symbol}`);
+  }
+
+  // Merge with NSE as primary, BSE as fallback
+  const merged = mergeExchangeData(nsData, bseData);
+
+  // Log which exchanges provided data
+  if (merged.dataSource.nse && merged.dataSource.bse) {
+    console.log(`    ✓ Merged data from both NSE and BSE`);
+  } else if (merged.dataSource.nse) {
+    console.log(`    ✓ Data from NSE only`);
+  } else {
+    console.log(`    ✓ Data from BSE only`);
+  }
+
+  return merged;
 }
 
 /**
@@ -186,21 +389,25 @@ async function fetchPeers(stockId, sector) {
 
   const fundMap = Object.fromEntries((fundData || []).map((f) => [f.stock_id, f]));
 
-  return data.map((p) => ({
-    symbol: p.symbol,
-    market_cap_cr: p.market_cap_cr,
-    pe: fundMap[p.id]?.pe ?? null,
-    pb: fundMap[p.id]?.pb ?? null,
-    roe: fundMap[p.id]?.roe ?? null,
-    roce: fundMap[p.id]?.roce ?? null,
-    debt_to_equity: fundMap[p.id]?.debt_to_equity ?? null,
-    net_margin: fundMap[p.id]?.net_margin ?? null,
-    operating_margin: fundMap[p.id]?.operating_margin ?? null,
-    revenue_cr: fundMap[p.id]?.revenue_cr ?? null,
-    eps: fundMap[p.id]?.eps ?? null,
-    dividend_yield: fundMap[p.id]?.dividend_yield ?? null,
-    book_value: fundMap[p.id]?.book_value ?? null,
-  }));
+  return data.map((p) => {
+    const fund = fundMap[p.id];
+    return {
+      symbol: p.symbol,
+      market_cap_cr: p.market_cap_cr,
+      pe: fund?.pe ?? null,
+      pb: fund?.pb ?? null,
+      // Normalize percentage metrics from database (stored as 28.5) to decimal (0.285) to match Yahoo Finance format
+      roe: fund?.roe != null ? fund.roe / 100 : null,
+      roce: fund?.roce != null ? fund.roce / 100 : null,
+      debt_to_equity: fund?.debt_to_equity ?? null,
+      net_margin: fund?.net_margin != null ? fund.net_margin / 100 : null,
+      operating_margin: fund?.operating_margin != null ? fund.operating_margin / 100 : null,
+      revenue_cr: fund?.revenue_cr ?? null,
+      eps: fund?.eps ?? null,
+      dividend_yield: fund?.dividend_yield != null ? fund.dividend_yield / 100 : null,
+      book_value: fund?.book_value ?? null,
+    };
+  });
 }
 
 /**
@@ -233,8 +440,19 @@ async function generateForStock(stock) {
 
   const yahoo = await fetchYahooData(symbol);
   const peers = await fetchPeers(stockId, sector);
-  const dataContext = buildDataContext(symbol, yahoo.quote, yahoo.financialData, yahoo.fundamentals, yahoo.chart, peers, yahoo.timeSeries);
-  const prompt = buildAnalysisPrompt(dataContext);
+  const dataContext = buildDataContext(
+    symbol,
+    yahoo.quote,
+    yahoo.financialData,
+    yahoo.fundamentals,
+    yahoo.chart,
+    peers,
+    yahoo.timeSeries,
+    yahoo.dataSource,
+    yahoo.impliedVolatility,
+    sector
+  );
+  const prompt = buildAnalysisPrompt(dataContext, sector);
 
   const promptSize = JSON.stringify(prompt).length;
   console.log(`  [${symbol}] Prompt size: ${(promptSize / 1024).toFixed(2)} KB`);
@@ -243,6 +461,7 @@ async function generateForStock(stock) {
     console.warn(`  [${symbol}] WARNING: Prompt exceeds 25KB (${(promptSize / 1024).toFixed(2)} KB) - may hit API limits`);
   }
 
+  console.log(`The prompt for ${symbol} is:\n${prompt}\n`);
   console.log(`[${symbol}] Calling Mistral LLM API...`);
   let analysisJson;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
