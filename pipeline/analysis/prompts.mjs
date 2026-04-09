@@ -166,6 +166,29 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
   const toPct = (v) => { const n = safe(v); return n != null ? (n * 100).toFixed(2) + "%" : "N/A"; };
   const toCr = (v) => { const n = safe(v); return n != null ? (n / 1_00_00_000).toFixed(2) + " Cr" : "N/A"; };
   const fmt = (v, suffix = "") => { const n = safe(v); return n != null ? n.toFixed(2) + suffix : "N/A"; };
+  
+  // Safe date parser: handles string dates, timestamps, and invalid inputs
+  const safeDate = (dateInput) => {
+    if (!dateInput) return "N/A";
+    try {
+      // If it's a number (milliseconds since epoch), use it directly
+      let d;
+      if (typeof dateInput === 'number') {
+        d = new Date(dateInput);
+      } else if (typeof dateInput === 'string') {
+        // Try parsing the string
+        d = new Date(dateInput);
+      } else {
+        return "N/A";
+      }
+      // Check if date is valid
+      if (isNaN(d.getTime())) return "N/A";
+      return d.toLocaleDateString("en-IN");
+    } catch (err) {
+      return "N/A";
+    }
+  };
+  
   const safeText = (text) => {
     if (!text) return "";
     return String(text)
@@ -288,7 +311,7 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
   if (quote?.earningsHistory?.history?.length) {
     text += `── Earnings History ──\n`;
     for (const earning of quote.earningsHistory.history.slice(0, 4)) {
-      const date = new Date(earning.epsReportDate).toLocaleDateString("en-IN");
+      const date = safeDate(earning.epsReportDate);
       text += `  ${date}: EPS Reported ${fmt(earning.epsActual)} vs Estimate ${fmt(earning.epsEstimate)}\n`;
     }
     text += `\n`;
@@ -298,7 +321,7 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
   if (quote?.dividends?.event?.length) {
     text += `── Dividend History ──\n`;
     for (const div of quote.dividends.event.slice(0, 5)) {
-      const date = new Date(div.parseDate).toLocaleDateString("en-IN");
+      const date = safeDate(div.parseDate);
       text += `  ${date}: ₹${fmt(div.amount)} per share\n`;
     }
     text += `\n`;
@@ -312,7 +335,7 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
     text += `  Recent transactions: ${buyCount} buys, ${sellCount} sells\n`;
     if (quote.insiderTransactions.transactions.length > 0) {
       const latest = quote.insiderTransactions.transactions[0];
-      const date = new Date(latest.transactionDate).toLocaleDateString("en-IN");
+      const date = safeDate(latest.transactionDate);
       text += `  Latest: ${latest.ownerName} - ${latest.transactionType} ${latest.shares} shares on ${date}\n`;
     }
     text += `\n`;
