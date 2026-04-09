@@ -27,7 +27,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import YahooFinance from "yahoo-finance2";
-import { buildDataContext, buildAnalysisPrompt, PROMPT_VERSION } from "./prompts.mjs";
+import { buildDataContext, buildAnalysisPrompt, computeQuantScore, PROMPT_VERSION } from "./prompts.mjs";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -452,7 +452,12 @@ async function generateForStock(stock) {
     yahoo.impliedVolatility,
     sector
   );
-  const prompt = buildAnalysisPrompt(dataContext, sector);
+
+  // Compute deterministic quantitative base score
+  const quantScore = computeQuantScore(yahoo.fundamentals, peers, sector, yahoo.chart);
+  console.log(`  [${symbol}] Quant base score: ${quantScore.overall}/100 (Prof:${quantScore.components.profitability} Val:${quantScore.components.valuation} Health:${quantScore.components.financial_health} Growth:${quantScore.components.growth} Mom:${quantScore.components.momentum})`);
+
+  const prompt = buildAnalysisPrompt(dataContext, sector, quantScore);
 
   const promptSize = JSON.stringify(prompt).length;
   console.log(`  [${symbol}] Prompt size: ${(promptSize / 1024).toFixed(2)} KB`);
@@ -510,9 +515,22 @@ async function generateForStock(stock) {
   }
 
   // Validate basic structure
-  if (!analysisJson?.overall_score || !analysisJson?.sections) {
+  if (!analysisJson?.sections) {
     throw new Error(`Invalid analysis JSON structure for ${symbol}`);
   }
+
+  // Enforce hybrid scoring: quant base ± LLM adjustment (clamped to ±15)
+  const llmAdjustment = Math.max(-15, Math.min(15, analysisJson.score_adjustment ?? 0));
+  const finalScore = Math.max(0, Math.min(100, quantScore.overall + llmAdjustment));
+
+  // Override LLM's overall_score with our enforced calculation
+  if (analysisJson.overall_score !== finalScore) {
+    console.log(`  [${symbol}] Score enforced: LLM said ${analysisJson.overall_score}, using ${quantScore.overall} + (${llmAdjustment}) = ${finalScore}`);
+  }
+  analysisJson.overall_score = finalScore;
+  analysisJson.quant_base_score = quantScore.overall;
+  analysisJson.score_adjustment = llmAdjustment;
+  analysisJson.quant_components = quantScore.components;
 
   // Score rotation
   const scores = await rotateScores(stockId);
@@ -524,7 +542,7 @@ async function generateForStock(stock) {
       {
         stock_id: stockId,
         analysis_json: analysisJson,
-        overall_score: analysisJson.overall_score,
+        overall_score: finalScore,
         prompt_version: PROMPT_VERSION,
         generated_at: new Date().toISOString(),
         ...scores,

@@ -3,7 +3,7 @@
  * Prompt version: v2 - Sector-aware analysis with peer context
  */
 
-export const PROMPT_VERSION = "v2";
+export const PROMPT_VERSION = "v3";
 
 /**
  * Sector-specific guidance to help LLM understand what metrics matter for different industries.
@@ -47,6 +47,278 @@ export const SECTOR_GUIDANCE = {
     interpretation_note: "Evaluate on pre-sales growth, margin trends, and whether leverage is manageable by cash flow.",
   },
 };
+
+// ── Sector-specific D/E thresholds (what's "normal" varies by sector) ──
+const SECTOR_DE_THRESHOLDS = {
+  "Financial Services": { low: 5, mid: 10, high: 15 },   // banks are inherently leveraged
+  "Real Estate":        { low: 1.0, mid: 2.0, high: 3.5 },
+  "Utilities":          { low: 1.0, mid: 2.0, high: 3.0 },
+  "default":            { low: 0.5, mid: 1.0, high: 2.0 },
+};
+
+/**
+ * Compute a deterministic quantitative score (0-100) purely from financial data.
+ * This removes LLM scoring bias — LLM can only adjust ±15 from this base.
+ *
+ * Components (weights sum to 100):
+ *   Profitability  25%  — ROE, net margin, operating margin
+ *   Valuation      20%  — P/E reasonableness, PEG, P/B
+ *   Financial Hlth 20%  — D/E (sector-adjusted), current ratio, cash-to-debt
+ *   Growth         20%  — Revenue growth, earnings growth, FCF
+ *   Momentum       15%  — Price vs 200 DMA, 52-week range position
+ */
+export function computeQuantScore(fundamentals, peers, sector, chart) {
+  const f = fundamentals ?? {};
+  const scores = {};
+  const breakdown = {};
+
+  // Helper: clamp 0-100
+  const clamp = (v) => Math.max(0, Math.min(100, Math.round(v)));
+
+  // Helper: percentile rank among peers for a metric (higher value = higher rank)
+  const peerPercentile = (stockVal, peerKey, higherIsBetter = true) => {
+    if (stockVal == null) return 50; // neutral if no data
+    const vals = (peers ?? []).map(p => p[peerKey]).filter(v => v != null && Number.isFinite(v));
+    if (vals.length === 0) return 50;
+    const allVals = [...vals, stockVal].sort((a, b) => a - b);
+    const rank = allVals.indexOf(stockVal) / (allVals.length - 1); // 0 to 1
+    return higherIsBetter ? rank * 100 : (1 - rank) * 100;
+  };
+
+  // ── 1. Profitability (25%) ──
+  {
+    let profScore = 50; // neutral default
+    let components = [];
+
+    // ROE: 0% → 0, 10% → 40, 20% → 70, 30%+ → 90
+    if (f.roe != null) {
+      const roeScore = clamp(f.roe * 100 * 3); // roe is decimal e.g. 0.15
+      const roePeer = peerPercentile(f.roe, 'roe', true);
+      components.push((roeScore * 0.5 + roePeer * 0.5)); // blend absolute + relative
+    }
+
+    // Net margin: negative → bad, 0-5% → poor, 5-15% → ok, 15-25% → good, 25%+ → great
+    if (f.net_margin != null) {
+      let marginScore;
+      if (f.net_margin < 0) marginScore = clamp(10 + f.net_margin * 100); // penalize losses
+      else marginScore = clamp(f.net_margin * 100 * 3);
+      const marginPeer = peerPercentile(f.net_margin, 'net_margin', true);
+      components.push((marginScore * 0.5 + marginPeer * 0.5));
+    }
+
+    // Operating margin
+    if (f.operating_margin != null) {
+      let opScore;
+      if (f.operating_margin < 0) opScore = clamp(10 + f.operating_margin * 100);
+      else opScore = clamp(f.operating_margin * 100 * 2.5);
+      components.push(opScore);
+    }
+
+    if (components.length > 0) {
+      profScore = components.reduce((a, b) => a + b) / components.length;
+    }
+    scores.profitability = clamp(profScore);
+    breakdown.profitability = { score: scores.profitability, roe: f.roe, net_margin: f.net_margin, operating_margin: f.operating_margin };
+  }
+
+  // ── 2. Valuation (20%) ──
+  {
+    let valScore = 50;
+    let components = [];
+
+    // P/E: <0 (loss-making) → 15, 0-10 → 85, 10-20 → 70, 20-40 → 50, 40-80 → 30, 80+ → 15
+    if (f.pe != null) {
+      let peScore;
+      if (f.pe < 0) peScore = 15; // loss-making
+      else if (f.pe <= 10) peScore = 85;
+      else if (f.pe <= 20) peScore = 75 - (f.pe - 10) * 0.5;
+      else if (f.pe <= 40) peScore = 60 - (f.pe - 20) * 1.0;
+      else if (f.pe <= 80) peScore = 35 - (f.pe - 40) * 0.25;
+      else peScore = 15;
+      const pePeer = peerPercentile(f.pe, 'pe', false); // lower P/E is better
+      components.push((peScore * 0.4 + pePeer * 0.6)); // weight peer comparison more
+    }
+
+    // PEG: <1 → great value, 1-2 → fair, 2-3 → expensive, >3 → very expensive
+    if (f.peg != null && f.peg > 0) {
+      let pegScore;
+      if (f.peg <= 0.5) pegScore = 90;
+      else if (f.peg <= 1.0) pegScore = 80;
+      else if (f.peg <= 1.5) pegScore = 65;
+      else if (f.peg <= 2.0) pegScore = 50;
+      else if (f.peg <= 3.0) pegScore = 35;
+      else pegScore = 20;
+      components.push(pegScore);
+    }
+
+    // P/B: context-dependent but lower generally better
+    if (f.pb != null) {
+      let pbScore;
+      if (f.pb < 0) pbScore = 10;
+      else if (f.pb <= 1) pbScore = 80;
+      else if (f.pb <= 3) pbScore = 65;
+      else if (f.pb <= 5) pbScore = 45;
+      else pbScore = 25;
+      components.push(pbScore * 0.5); // lower weight
+    }
+
+    if (components.length > 0) {
+      valScore = components.reduce((a, b) => a + b) / components.length;
+    }
+    scores.valuation = clamp(valScore);
+    breakdown.valuation = { score: scores.valuation, pe: f.pe, peg: f.peg, pb: f.pb };
+  }
+
+  // ── 3. Financial Health (20%) ──
+  {
+    let healthScore = 50;
+    let components = [];
+
+    // D/E: sector-adjusted
+    if (f.debt_to_equity != null) {
+      const thresholds = SECTOR_DE_THRESHOLDS[sector] ?? SECTOR_DE_THRESHOLDS["default"];
+      let deScore;
+      if (f.debt_to_equity <= thresholds.low) deScore = 85;
+      else if (f.debt_to_equity <= thresholds.mid) deScore = 65;
+      else if (f.debt_to_equity <= thresholds.high) deScore = 40;
+      else deScore = 20;
+      components.push(deScore);
+    }
+
+    // Current ratio: <1 → distress, 1-1.5 → tight, 1.5-3 → healthy, >3 → excess cash
+    if (f.current_ratio != null) {
+      let crScore;
+      if (f.current_ratio < 0.5) crScore = 15;
+      else if (f.current_ratio < 1.0) crScore = 35;
+      else if (f.current_ratio < 1.5) crScore = 60;
+      else if (f.current_ratio <= 3.0) crScore = 80;
+      else crScore = 65; // too much idle cash
+      components.push(crScore);
+    }
+
+    // Cash-to-debt ratio: higher is better
+    if (f.cash_to_debt != null) {
+      let cashScore;
+      if (f.cash_to_debt >= 1.0) cashScore = 85; // more cash than debt
+      else if (f.cash_to_debt >= 0.5) cashScore = 65;
+      else if (f.cash_to_debt >= 0.2) cashScore = 45;
+      else cashScore = 25;
+      components.push(cashScore);
+    }
+
+    if (components.length > 0) {
+      healthScore = components.reduce((a, b) => a + b) / components.length;
+    }
+    scores.financial_health = clamp(healthScore);
+    breakdown.financial_health = { score: scores.financial_health, debt_to_equity: f.debt_to_equity, current_ratio: f.current_ratio, cash_to_debt: f.cash_to_debt };
+  }
+
+  // ── 4. Growth (20%) ──
+  {
+    let growthScore = 50;
+    let components = [];
+
+    // Revenue growth: negative → bad, 0-5% → slow, 5-15% → moderate, 15-30% → strong, 30%+ → hyper
+    if (f.revenue_growth != null) {
+      let revScore;
+      if (f.revenue_growth < -0.10) revScore = 10;
+      else if (f.revenue_growth < 0) revScore = 30;
+      else if (f.revenue_growth < 0.05) revScore = 45;
+      else if (f.revenue_growth < 0.15) revScore = 65;
+      else if (f.revenue_growth < 0.30) revScore = 80;
+      else revScore = 92;
+      components.push(revScore);
+    }
+
+    // Earnings growth
+    if (f.earnings_growth != null) {
+      let earnScore;
+      if (f.earnings_growth < -0.20) earnScore = 10;
+      else if (f.earnings_growth < 0) earnScore = 30;
+      else if (f.earnings_growth < 0.10) earnScore = 50;
+      else if (f.earnings_growth < 0.25) earnScore = 70;
+      else if (f.earnings_growth < 0.50) earnScore = 85;
+      else earnScore = 92;
+      components.push(earnScore);
+    }
+
+    // Free cash flow: positive is good, negative is concerning
+    if (f.free_cash_flow != null) {
+      let fcfScore;
+      if (f.free_cash_flow < 0) fcfScore = 20;
+      else if (f.free_cash_flow < 100) fcfScore = 45; // small FCF (<100 Cr)
+      else if (f.free_cash_flow < 1000) fcfScore = 65;
+      else fcfScore = 80;
+      components.push(fcfScore * 0.5); // lower weight
+    }
+
+    if (components.length > 0) {
+      growthScore = components.reduce((a, b) => a + b) / components.length;
+    }
+    scores.growth = clamp(growthScore);
+    breakdown.growth = { score: scores.growth, revenue_growth: f.revenue_growth, earnings_growth: f.earnings_growth, free_cash_flow: f.free_cash_flow };
+  }
+
+  // ── 5. Momentum (15%) ──
+  {
+    let momentumScore = 50;
+    let components = [];
+
+    // Price vs 200 DMA: above → bullish, below → bearish
+    if (f.fifty_day_ma != null && f.two_hundred_day_ma != null) {
+      // 50 DMA vs 200 DMA (golden cross / death cross)
+      const maRatio = f.fifty_day_ma / f.two_hundred_day_ma;
+      if (maRatio > 1.05) components.push(80); // strong uptrend
+      else if (maRatio > 1.0) components.push(65);
+      else if (maRatio > 0.95) components.push(40);
+      else components.push(20); // strong downtrend
+    }
+
+    // 52-week range position from chart
+    if (f.fifty_two_week_high != null && f.fifty_two_week_low != null) {
+      // Try to get current price from chart
+      const quotes = chart?.quotes;
+      const currentPrice = quotes?.length ? quotes[quotes.length - 1]?.close : null;
+      if (currentPrice && f.fifty_two_week_high > f.fifty_two_week_low) {
+        const rangePosition = (currentPrice - f.fifty_two_week_low) / (f.fifty_two_week_high - f.fifty_two_week_low);
+        // Mid-range is neutral; near highs slightly positive; near lows negative
+        if (rangePosition > 0.8) components.push(75);
+        else if (rangePosition > 0.5) components.push(65);
+        else if (rangePosition > 0.3) components.push(45);
+        else components.push(25);
+      }
+    }
+
+    // Beta: high beta → higher risk, slightly penalize
+    if (f.beta != null) {
+      if (f.beta > 1.5) components.push(30);
+      else if (f.beta > 1.2) components.push(45);
+      else if (f.beta > 0.8) components.push(60);
+      else components.push(55); // very low beta → defensive
+    }
+
+    if (components.length > 0) {
+      momentumScore = components.reduce((a, b) => a + b) / components.length;
+    }
+    scores.momentum = clamp(momentumScore);
+    breakdown.momentum = { score: scores.momentum, fifty_day_ma: f.fifty_day_ma, two_hundred_day_ma: f.two_hundred_day_ma, beta: f.beta };
+  }
+
+  // ── Weighted overall ──
+  const overall = clamp(
+    scores.profitability * 0.25 +
+    scores.valuation * 0.20 +
+    scores.financial_health * 0.20 +
+    scores.growth * 0.20 +
+    scores.momentum * 0.15
+  );
+
+  return {
+    overall,
+    components: scores,
+    breakdown,
+  };
+}
 
 /**
  * Calculate how a stock ranks relative to its peers for a specific metric.
@@ -552,7 +824,7 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
 /**
  * The full analysis prompt sent to LLM.
  */
-export function buildAnalysisPrompt(dataContext, sector) {
+export function buildAnalysisPrompt(dataContext, sector, quantScore) {
   // Add sector guidance if available
   let sectorContext = '';
   if (sector && SECTOR_GUIDANCE[sector]) {
@@ -571,15 +843,40 @@ Analysis approach: ${guidance.interpretation_note}
 `;
   }
 
+  // Build quant score context for the LLM
+  let quantContext = '';
+  if (quantScore) {
+    const c = quantScore.components;
+    quantContext = `
+
+[QUANTITATIVE BASE SCORE: ${quantScore.overall}/100]
+This score was computed deterministically from the financial data above:
+  Profitability:    ${c.profitability}/100 (weight 25%)
+  Valuation:        ${c.valuation}/100 (weight 20%)
+  Financial Health: ${c.financial_health}/100 (weight 20%)
+  Growth:           ${c.growth}/100 (weight 20%)
+  Momentum:         ${c.momentum}/100 (weight 15%)
+
+You MUST use this as your starting point. Your overall_score should be this base ± up to 15 points.
+Adjust UP if: strong moat, exceptional management, hidden catalysts, or intangible strengths the numbers miss.
+Adjust DOWN if: governance concerns, structural risks, sector headwinds, or data quality issues.
+You MUST provide "score_adjustment" (integer -15 to +15) and "adjustment_rationale" (1-2 sentences explaining WHY).
+`;
+  }
+
   return `You are an expert Indian equity research analyst specializing in deep fundamental analysis. Analyse the stock below and produce a comprehensive investment analysis in JSON format.
 
 ${sectorContext}
+${quantContext}
 
 ${dataContext}
 
 Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON):
 {
-  "overall_score": <integer 0-100>,
+  "quant_base_score": ${quantScore?.overall ?? '"N/A"'},
+  "score_adjustment": <integer -15 to +15>,
+  "adjustment_rationale": "<1-2 sentences explaining why you adjusted from the base>",
+  "overall_score": <integer 0-100, must equal quant_base_score + score_adjustment>,
   "investment_thesis": "<Comprehensive thesis>",
   "sections": {
     "business_model_moat": {
@@ -668,6 +965,8 @@ Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON
 }
 
 RULES:
+- SCORING: The overall_score MUST equal quant_base_score + score_adjustment. Do NOT ignore the quant base.
+- Section scores should reflect the quant component scores as anchors (e.g., if profitability quant = 35, profitability_growth section should be near 35 ± 10).
 - Each section MUST have 3-4 findings with supporting_data referencing actual numbers from the data above.
 - Scores: 0-30 = poor, 31-50 = below average, 51-70 = average, 71-85 = good, 86-100 = excellent.
 - For key_investment_risks, a LOWER score means HIGHER risk (inverted — 20 = very risky, 80 = low risk).
