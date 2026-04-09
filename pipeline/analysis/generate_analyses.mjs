@@ -461,7 +461,6 @@ async function generateForStock(stock) {
     console.warn(`  [${symbol}] WARNING: Prompt exceeds 25KB (${(promptSize / 1024).toFixed(2)} KB) - may hit API limits`);
   }
 
-  console.log(`The prompt for ${symbol} is:\n${prompt}\n`);
   console.log(`[${symbol}] Calling Mistral LLM API...`);
   let analysisJson;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
