@@ -638,36 +638,6 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
     text += `  Buys: ${latestRec.buy} | Holds: ${latestRec.hold} | Sells: ${latestRec.sell} | Strong Buys: ${latestRec.strongBuy} | Strong Sells: ${latestRec.strongSell}\n\n`;
   }
 
-  // Income statement historical (fallback if no time series data)
-  if (quote?.incomeStatementHistory?.incomeStatementHistory?.length && !fundamentals?.income) {
-    text += `── Income Statement History (Annual) ──\n`;
-    for (const stmt of quote.incomeStatementHistory.incomeStatementHistory.slice(0, 3)) {
-      const date = stmt.endDate ? new Date(stmt.endDate).toLocaleDateString("en-IN") : "N/A";
-      text += `  ${date}: Revenue ${toCr(stmt.totalRevenue)} | Net Income ${toCr(stmt.netIncome)}\n`;
-    }
-    text += `\n`;
-  }
-
-  // Balance sheet historical (fallback if no time series data)
-  if (quote?.balanceSheetHistory?.balanceSheetStatements?.length && !fundamentals?.balance) {
-    text += `── Balance Sheet History (Annual) ──\n`;
-    for (const bs of quote.balanceSheetHistory.balanceSheetStatements.slice(0, 3)) {
-      const date = bs.endDate ? new Date(bs.endDate).toLocaleDateString("en-IN") : "N/A";
-      text += `  ${date}: Assets ${toCr(bs.totalAssets)} | Liab ${toCr(bs.totalLiab)} | Equity ${toCr(bs.totalStockholderEquity)}\n`;
-    }
-    text += `\n`;
-  }
-
-  // Cash flow historical (fallback if no time series data)
-  if (quote?.cashflowStatementHistory?.cashflowStatements?.length && !fundamentals?.cash) {
-    text += `── Cash Flow History (Annual) ──\n`;
-    for (const cf of quote.cashflowStatementHistory.cashflowStatements.slice(0, 3)) {
-      const date = cf.endDate ? new Date(cf.endDate).toLocaleDateString("en-IN") : "N/A";
-      text += `  ${date}: Op Cash ${toCr(cf.totalCashFromOperatingActivities)} | CapEx ${toCr(cf.capitalExpenditures)}\n`;
-    }
-    text += `\n`;
-  }
-
   // Process fundamentalsTimeSeries data if available
   if (timeSeries) {
     // Income statement from timeSeries - show 2-3 periods max

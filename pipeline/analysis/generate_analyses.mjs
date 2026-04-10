@@ -278,14 +278,6 @@ async function fetchYahooData(symbol) {
             // Events & Filings
             "calendarEvents",
             "secFilings",
-            
-            // Financial statements
-            "incomeStatementHistory",
-            "incomeStatementHistoryQuarterly",
-            "balanceSheetHistory",
-            "balanceSheetHistoryQuarterly",
-            "cashflowStatementHistory",
-            "cashflowStatementHistoryQuarterly",
           ],
         }).catch(() => null),
         
