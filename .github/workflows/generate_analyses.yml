@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - run: cd pipeline/analysis && npm ci && node generate_analyses.mjs
+      - run: cd pipeline && npm ci && cd analysis && npm ci && node generate_analyses.mjs
     env:
       PIPELINE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       PIPELINE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
