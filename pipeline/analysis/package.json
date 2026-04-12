@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
+    "redis": "^5.11.0",
     "yahoo-finance2": "^3.14.0"
   }
 }

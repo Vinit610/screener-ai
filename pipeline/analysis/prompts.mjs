@@ -426,7 +426,7 @@ function buildPeerContext(symbol, stock, peers) {
 /**
  * Build a text representation of the financial data for the LLM.
  */
-export function buildDataContext(symbol, quote, financialData, fundamentals, chart, peers, timeSeries, dataSource, impliedVolatility, sector) {
+export function buildDataContext(symbol, quote, financialData, fundamentals, chart, peers, timeSeries, dataSource, impliedVolatility, sector, trends) {
   const sd = quote.summaryDetail ?? {};
   const ks = quote.defaultKeyStatistics ?? {};
   const fd = quote.financialData ?? {};
@@ -785,6 +785,63 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
       text += `    D/E: ${fmt(p.debt_to_equity)} | Net Margin: ${toPct(p.net_margin)} | Op Margin: ${toPct(p.operating_margin)}\n`;
       text += `    Revenue: ${toCr(p.revenue_cr)} | EPS: ${fmt(p.eps)} | Div Yield: ${toPct(p.dividend_yield)}\n`;
     }
+    text += `\n`;
+  }
+
+  // Add historical trends (5-year) if available
+  if (trends && Object.keys(trends).length > 0) {
+    // Format trends into compact LLM-friendly summary
+    text += `── Historical Trends (5-Year) ──\n`;
+
+    // P/E trending
+    if (trends.pe) {
+      const { current, median, cagr, direction } = trends.pe;
+      const vsMedian = current > median ? 'above' : 'below';
+      text += `P/E: ${current}x (median: ${median}x, ${vsMedian} median, direction: ${direction})`;
+      if (cagr !== null && cagr !== undefined) text += ` [CAGR: ${cagr > 0 ? '+' : ''}${cagr}%]`;
+      text += `\n`;
+    }
+
+    // Margin trends (sm object contains npm, opm, gpm)
+    if (trends.sm) {
+      // Try different possible keys for margins
+      const npmData = trends.sm.npm || trends.sm.NPM;
+      if (npmData) {
+        const { current, median, cagr, direction } = npmData;
+        text += `Net Margin: ${current}% (median: ${median}%, trend: ${direction})`;
+        if (cagr !== null && cagr !== undefined) text += ` [CAGR: ${cagr > 0 ? '+' : ''}${cagr}%]`;
+        text += `\n`;
+      }
+
+      const opmData = trends.sm.opm || trends.sm.OPM;
+      if (opmData) {
+        const { current, median, cagr, direction } = opmData;
+        text += `Operating Margin: ${current}% (median: ${median}%, trend: ${direction})`;
+        if (cagr !== null && cagr !== undefined) text += ` [CAGR: ${cagr > 0 ? '+' : ''}${cagr}%]`;
+        text += `\n`;
+      }
+    }
+
+    // P/B trending
+    if (trends.ptb) {
+      const { current, median, direction } = trends.ptb;
+      const vsMedian = current > median ? 'above' : 'below';
+      text += `P/B: ${current}x (median: ${median}x, trend: ${direction})\n`;
+    }
+
+    // EV/EBITDA trending
+    if (trends.evebitda) {
+      const { current, median, direction } = trends.evebitda;
+      const vsMedian = current > median ? 'above' : 'below';
+      text += `EV/EBITDA: ${current}x (median: ${median}x, trend: ${direction})\n`;
+    }
+
+    // Market Cap/Sales
+    if (trends.mcs) {
+      const { current, median, direction } = trends.mcs;
+      text += `MCS: ${current}x (median: ${median}x, trend: ${direction})\n`;
+    }
+
     text += `\n`;
   }
 

@@ -28,6 +28,7 @@
 import { createClient } from "@supabase/supabase-js";
 import YahooFinance from "yahoo-finance2";
 import { buildDataContext, buildAnalysisPrompt, computeQuantScore, PROMPT_VERSION } from "./prompts.mjs";
+import { fetchHistoricalTrends, closeRedis } from "../data_sources/indian_stock_api.mjs";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -311,6 +312,7 @@ async function fetchYahooData(symbol) {
         impliedVolatility = atmOption?.impliedVolatility;
       }
 
+      console.log(`    ✓ Fetched from ${yahooSymbol} (Quote: ${quote.price?.regularMarketPrice ?? "N/A"}, Volatility: ${impliedVolatility ?? "N/A"})`);
       return {
         quote,
         financialData: quote.financialData,
@@ -324,7 +326,7 @@ async function fetchYahooData(symbol) {
         impliedVolatility,
       };
     } catch (err) {
-      console.warn(`    Could not fetch from ${yahooSymbol}: ${err.message}`);
+      console.log(`    Could not fetch from ${yahooSymbol}: ${err.message}`);
       return null;
     }
   }
@@ -432,6 +434,7 @@ async function generateForStock(stock) {
 
   const yahoo = await fetchYahooData(symbol);
   const peers = await fetchPeers(stockId, sector);
+  const trends = await fetchHistoricalTrends(symbol, '5yr'); // Fetched monthly, cached
   const dataContext = buildDataContext(
     symbol,
     yahoo.quote,
@@ -442,8 +445,11 @@ async function generateForStock(stock) {
     yahoo.timeSeries,
     yahoo.dataSource,
     yahoo.impliedVolatility,
-    sector
+    sector,
+    trends
   );
+
+  console.log(`Data fetched from the indian stock API, compacted later is: ${JSON.stringify(trends)}`);
 
   // Compute deterministic quantitative base score
   const quantScore = computeQuantScore(yahoo.fundamentals, peers, sector, yahoo.chart);
@@ -612,10 +618,13 @@ async function main() {
   if (failures.length) console.log(`  Failures:  ${failures.join(", ")}`);
   console.log(`${"=".repeat(50)}`);
 
+  // Close Redis connection before exit
+  await closeRedis();
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("Fatal error:", err);
+  await closeRedis();
   process.exit(1);
 });
