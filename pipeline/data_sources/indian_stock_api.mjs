@@ -34,12 +34,12 @@ async function initRedis() {
   }
   
   try {
-    // Upstash format: https://[subdomain].upstash.io
-    // Convert to rediss:// (TLS) for node-redis client
-    const redisProtocolUrl = redisUrl
-      .replace('https://', 'rediss://')
-      .replace('http://', 'redis://')
-      + ':6379?password=' + redisToken;
+    // Upstash REST URL format: https://[subdomain].upstash.io
+    // node-redis needs: rediss://default:TOKEN@HOST:6379
+    const urlObj = new URL(redisUrl);
+    const host = urlObj.hostname;
+    const protocol = redisUrl.startsWith('https') ? 'rediss' : 'redis';
+    const redisProtocolUrl = `${protocol}://default:${encodeURIComponent(redisToken)}@${host}:6379`;
     
     redisClient = createClient({
       url: redisProtocolUrl,

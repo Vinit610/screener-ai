@@ -3,7 +3,7 @@
  * Prompt version: v2 - Sector-aware analysis with peer context
  */
 
-export const PROMPT_VERSION = "v3";
+export const PROMPT_VERSION = "v4";
 
 /**
  * Sector-specific guidance to help LLM understand what metrics matter for different industries.
@@ -849,164 +849,207 @@ export function buildDataContext(symbol, quote, financialData, fundamentals, cha
 }
 
 /**
- * The full analysis prompt sent to LLM.
+ * The full analysis prompt sent to LLM — NARRATIVE-FIRST v4
+ *
+ * Philosophy: Numbers support the story, NOT the other way around.
+ * Each section reads like institutional research: lead with "why",
+ * cite numbers in parentheses as evidence, synthesize conclusions.
  */
 export function buildAnalysisPrompt(dataContext, sector, quantScore) {
-  // Add sector guidance if available
   let sectorContext = '';
   if (sector && SECTOR_GUIDANCE[sector]) {
     const guidance = SECTOR_GUIDANCE[sector];
     sectorContext = `
-
-[SECTOR ANALYSIS GUIDANCE: ${sector}]
-${guidance.key_message}
-
-Key metrics to focus on: ${guidance.focus_metrics.join(", ")}
-
-Important cautions:
-${guidance.cautions.map(c => `- ${c}`).join("\n")}
-
-Analysis approach: ${guidance.interpretation_note}
+[SECTOR CONTEXT: ${sector}]
+Core principle: ${guidance.key_message}
+Priority metrics: ${guidance.focus_metrics.join(", ")}
+Cautions:
+${guidance.cautions.map(c => `• ${c}`).join("\n")}
+Analytical lens: ${guidance.interpretation_note}
 `;
   }
 
-  // Build quant score context for the LLM
   let quantContext = '';
   if (quantScore) {
     const c = quantScore.components;
     quantContext = `
+[QUANTITATIVE FOUNDATION: ${quantScore.overall}/100]
+  Profitability (25%):    ${c.profitability}/100
+  Valuation (20%):        ${c.valuation}/100
+  Financial Health (20%): ${c.financial_health}/100
+  Growth (20%):           ${c.growth}/100
+  Momentum (15%):         ${c.momentum}/100
 
-[QUANTITATIVE BASE SCORE: ${quantScore.overall}/100]
-This score was computed deterministically from the financial data above:
-  Profitability:    ${c.profitability}/100 (weight 25%)
-  Valuation:        ${c.valuation}/100 (weight 20%)
-  Financial Health: ${c.financial_health}/100 (weight 20%)
-  Growth:           ${c.growth}/100 (weight 20%)
-  Momentum:         ${c.momentum}/100 (weight 15%)
-
-You MUST use this as your starting point. Your overall_score should be this base ± up to 15 points.
-Adjust UP if: strong moat, exceptional management, hidden catalysts, or intangible strengths the numbers miss.
-Adjust DOWN if: governance concerns, structural risks, sector headwinds, or data quality issues.
-You MUST provide "score_adjustment" (integer -15 to +15) and "adjustment_rationale" (1-2 sentences explaining WHY).
+Your overall_score MUST = quant_base_score (${quantScore.overall}) + score_adjustment (integer -15 to +15).
+Adjust UP (+5 to +15): strong moat, management excellence, hidden catalysts.
+Adjust DOWN (-5 to -15): governance risk, structural headwinds, cyclical downswing.
 `;
   }
 
-  return `You are an expert Indian equity research analyst specializing in deep fundamental analysis. Analyse the stock below and produce a comprehensive investment analysis in JSON format.
+  return `You are a senior equity research analyst with 15+ years covering Indian markets. Produce an institutional-grade investment research note. Your writing must be NARRATIVE-FIRST: lead with insight and reasoning, cite numbers in parentheses as supporting evidence.
+
+CRITICAL WRITING RULES:
+1. NARRATIVE FIRST: Lead every paragraph with the analytical insight ("why"), then cite numbers in parentheses. BAD: "P/E is 18x. Moderate valuation." GOOD: "The stock commands a modest premium to peers because its earnings growth trajectory (12% CAGR) justifies a slightly elevated multiple (18x P/E vs sector median 15x), implying a PEG of 1.5x—cheaper than peers on a growth-adjusted basis."
+2. EXPLAIN THE WHY: For every claim, explain WHY it matters. Don't just state "high debt"—explain what that debt means for dividend safety, for refinancing risk, for flexibility to invest counter-cyclically.
+3. SYNTHESIZE MULTIPLE DATA POINTS: Connect metrics into conclusions. "Margins expanded 150bps YoY (11% vs 9.5%) BECAUSE operating leverage kicked in as revenue scaled faster than fixed costs—this is quality growth, not just topline expansion."
+4. NUMBERS IN PARENTHESES: Weave metrics naturally into sentences. "The company generates consistent returns (ROE 18-20%, above peer median 12%) suggesting durable competitive advantage rather than cyclical luck."
+5. BE VERBOSE WHERE IT ADDS INSIGHT: Each narrative field should be 2-3 substantive paragraphs. One-liners are unacceptable. Show your analytical reasoning chain.
+6. PEER COMPARISONS MUST BE SPECIFIC: "P/E 18x vs TCS 25x and Infosys 22x—cheapest among large-cap IT on absolute basis, and cheapest on PEG (1.5x vs 2.1x and 1.8x)"—not "moderate valuation vs peers."
 
 ${sectorContext}
 ${quantContext}
 
 ${dataContext}
 
-Return a JSON object with EXACTLY this structure (no markdown fencing, pure JSON):
+Return a JSON object with EXACTLY this structure (no markdown, pure JSON):
 {
   "quant_base_score": ${quantScore?.overall ?? '"N/A"'},
   "score_adjustment": <integer -15 to +15>,
-  "adjustment_rationale": "<1-2 sentences explaining why you adjusted from the base>",
+  "adjustment_rationale": "<2-3 sentences connecting qualitative reasoning to the numerical adjustment>",
   "overall_score": <integer 0-100, must equal quant_base_score + score_adjustment>,
-  "investment_thesis": "<Comprehensive thesis>",
+
+  "executive_summary": {
+    "one_liner": "<15-20 word thesis capturing the essential investment case>",
+    "paragraph": "<3-4 sentences: (1) What is the business, (2) Why it matters now, (3) Key opportunity or risk, (4) Verdict>"
+  },
+
+  "investment_thesis": "<2-3 paragraph narrative. Lead with the compelling reason to own or avoid. Cite financial evidence in parentheses. Connect business model → competitive advantage → financial performance → valuation → catalyst. This is the 'story' an investor reads first.>",
+
   "sections": {
     "business_model_moat": {
       "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
-      ],
-      "vs_sector": "<how this compares to peers>",
-      "bull": "<best-case scenario>",
-      "bear": "<worst-case scenario>",
-      "watch_triggers": ["<event that could change the thesis>"]
+      "narrative": "<2-3 paragraphs. Start with WHY this business is defensible. Pricing power? Brand loyalty? Switching costs? Network effects? Integrate metrics naturally: 'Consistent ROE of 18-20% (vs peer avg 12%) over 5 years suggests sustainable competitive advantage rather than cyclical strength.' Explain what could erode the moat.>",
+      "key_strengths": ["<competitive advantage with supporting metric in parentheses>"],
+      "vulnerabilities": ["<risk to moat with potential impact quantified>"],
+      "bull_case": "<1 paragraph: If moat strengthens, how large could this business become? Reference TAM, share gains, pricing power with data.>",
+      "bear_case": "<1 paragraph: How could the moat erode? Competition, disruption, regulation? Cite why credible.>",
+      "watch": ["<Specific metric with baseline and trigger threshold>"]
     },
+
     "financial_health": {
       "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
-      ],
-      "vs_sector": "<how this compares to peers>",
-      "bull": "<best case>",
-      "bear": "<worst case>",
-      "watch_triggers": ["<trigger>"]
+      "narrative": "<2-3 paragraphs on balance sheet strength. Lead with capital structure story: Is debt manageable? Compare to sector norms. Connect debt → cash generation → flexibility. Example: 'D/E of 1.2x appears elevated for capital-light IT (vs peer avg 0.6x), BUT FCF conversion of 85% and interest coverage of 4.5x means the company generates sufficient cash to service debt comfortably. The key question is trend direction—is leverage improving or deteriorating?'>",
+      "debt_analysis": "<1 paragraph: Absolute debt vs peers, trend direction, coverage ratios (interest coverage, debt/EBITDA). Conclude: manageable or concerning?>",
+      "liquidity_assessment": "<1 paragraph: Current ratio, quick ratio, cash conversion. Is cash tied up in inventory/receivables or flowing freely? Trend?>",
+      "bull_case": "<1 paragraph: If balance sheet strengthens, what unlocks? Dividends? M&A? Growth capex?>",
+      "bear_case": "<1 paragraph: If stress occurs, what's the risk? Dividend cuts? Equity dilution? Covenant breach?>",
+      "watch": ["<Observable metric with trigger: 'D/E above 1.5x triggers covenant concern'>"]
     },
+
     "profitability_growth": {
       "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
-      ],
-      "vs_sector": "<how this compares to peers>",
-      "bull": "<best case>",
-      "bear": "<worst case>",
-      "watch_triggers": ["<trigger>"]
+      "narrative": "<2-3 paragraphs. Lead with growth trajectory and profitability quality. Example: 'Revenue CAGR of 15% over 5 years (above sector 10%) indicates market share gains. Simultaneously, net margin expanded from 8% to 11%, suggesting operational leverage—this is quality growth. However, YoY momentum has decelerated from 18% to 12%, warranting caution.' Explain: Is growth structural or cyclical? Can margins sustain if growth slows?>",
+      "revenue_analysis": "<1 paragraph: Historical growth (5yr CAGR, recent YoY, quarterly momentum). Direction: accelerating, decelerating, stable? Comparison to sector.>",
+      "margin_analysis": "<1 paragraph: Net margin, operating margin trends. Expanding or contracting? Why? Pricing power, cost discipline, or mix shift? Peer comparison.>",
+      "cash_generation": "<1 paragraph: FCF as % of net income. Is earnings quality real or accounting? Capital intensity (capex/revenue). Cash conversion trend.>",
+      "bull_case": "<1 paragraph: If growth accelerates AND margins expand, what's the prize? Earnings CAGR? Multiple expansion?>",
+      "bear_case": "<1 paragraph: If growth stalls and margins compress, what's the downside? Commoditization? Competition?>",
+      "watch": ["<Key trigger with threshold: 'Quarterly growth below 8% signals momentum loss'>"]
     },
+
     "balance_sheet_quality": {
       "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
-      ],
-      "vs_sector": "<how this compares to peers>",
-      "bull": "<best case>",
-      "bear": "<worst case>",
-      "watch_triggers": ["<trigger>"]
+      "narrative": "<2 paragraphs. Consolidated view of asset quality, liability composition, capital structure. Is this a fortress balance sheet or a house of cards? Lead with: Is the balance sheet built to create or extract value? Integrate asset composition, liability structure, hidden risks.>",
+      "capital_allocation": "<1 paragraph: How does management deploy capital? Organic capex vs acquisitions vs dividends vs buybacks vs debt reduction. Has it created value historically?>",
+      "hidden_risks": "<1 paragraph: Contingent liabilities, operating leases, pension obligations, tax disputes, legal risks. Material or immaterial?>",
+      "bull_case": "<1 paragraph: If capital structure improves, what unlocks?>",
+      "bear_case": "<1 paragraph: If hidden liabilities surface or stress occurs, what's the risk?>",
+      "watch": ["<Observable trigger with threshold>"]
     },
+
     "valuation_assessment": {
       "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
-      ],
-      "vs_sector": "<how this compares to peers>",
-      "bull": "<best case>",
-      "bear": "<worst case>",
-      "watch_triggers": ["<trigger>"]
+      "narrative": "<MOST CRITICAL SECTION. 2-3 paragraphs answering: Is this cheap or expensive and WHY? MUST connect P/E to growth (PEG), P/B to ROE (justified P/B), dividend yield to payout ratio (sustainability). Example: 'At 18x P/E, RELIANCE appears moderately valued. But with 12% earnings growth, the PEG is 1.5x. Peers trade at: TCS P/E 25x with 10% growth (PEG 2.5x), ITC P/E 15x with 4% growth (PEG 3.75x). On growth-adjusted basis, RELIANCE is CHEAPEST despite highest absolute P/E. Furthermore, P/B of 2.1x is justified by ROE of 15% (implied P/B at 10% CoE = 1.5x), suggesting modest premium for franchise value. The real question: if growth disappoints to 8%, P/E should compress to 14x (22% downside). If growth reaccelerates to 16%, P/E could expand to 22x (22% upside). Risk-reward skews slightly positive.'>",
+      "pe_analysis": "<1 paragraph: P/E vs historical range, vs sector avg, vs specific peers (cite names and numbers). What explains deviation from history/peers?>",
+      "growth_adjusted": "<1 paragraph: PEG analysis. Connect P/E to growth rate. Compare PEG vs specific peer PEGs. Verdict: cheap, fair, or expensive on growth-adjusted basis?>",
+      "asset_valuation": "<1 paragraph: P/B vs ROE. Justified P/B = ROE / Cost of Equity. Is market pricing franchise value appropriately? Compare to peers.>",
+      "yield_analysis": "<1 paragraph: Dividend yield, FCF yield (FCF/Market Cap), payout ratio. Is dividend safe? Is FCF yield attractive? Compare to peers.>",
+      "bull_case": "<1 paragraph: Under what scenario is this a bargain? Growth reacceleration? Margin expansion? Sentiment normalization? Give upside target.>",
+      "bear_case": "<1 paragraph: Under what scenario is this expensive? Growth disappointment? Margin compression? Give downside target.>",
+      "watch": ["<Trigger: 'LTM growth below 10% triggers multiple compression risk'>"]
     },
+
     "sector_macro_outlook": {
       "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<key point>", "supporting_data": "<number or fact>", "implication": "<what this means>" }
-      ],
-      "vs_sector": "<how this compares to peers>",
-      "bull": "<best case>",
-      "bear": "<worst case>",
-      "watch_triggers": ["<trigger>"]
+      "narrative": "<2 paragraphs. Where is the industry in its cycle? Growth, mature, or declining? What macro tailwinds/headwinds affect this sector? Is THIS company positioned to benefit or suffer? Connect sector dynamics to company-specific positioning.>",
+      "tailwinds": ["<Specific positive factor with data>"],
+      "headwinds": ["<Specific negative factor with data>"],
+      "bull_case": "<1 paragraph: If sector tailwinds accelerate and company executes?>",
+      "bear_case": "<1 paragraph: If sector headwinds intensify or company stumbles?>",
+      "watch": ["<Sector-level trigger to monitor>"]
     },
+
     "key_investment_risks": {
-      "score": <integer 0-100>,
-      "headline": "<brief summary>",
-      "findings": [
-        { "finding": "<risk>", "supporting_data": "<evidence>", "implication": "<potential impact>" }
+      "score": <integer 0-100, INVERTED: 20 = very risky, 80 = low risk>,
+      "narrative": "<2 paragraphs synthesizing top 2-3 risks. For each: (1) evidence it's real, (2) why it matters (quantify downside), (3) timeline, (4) what you're watching. Example: 'The primary risk is margin compression. Gross margins slipped from 35% to 33% in recent quarters due to input inflation. If structural (labor cost ratchet), margins could settle at 30%, implying 15% earnings downside. We're watching: (a) quarterly margin trend for stabilization, (b) price realization in next 2 quarters, (c) peer margin trends for comparison.'>",
+      "primary_risks": [
+        {
+          "risk": "<Description>",
+          "evidence": "<Why credible—cite data or trends>",
+          "impact": "<Quantified downside if realized>",
+          "timeline": "<imminent/6-12mo/2yr>",
+          "monitor": "<Observable metric or event>"
+        }
       ],
-      "vs_sector": "<sector-relative risk level>",
-      "bull": "<if risks don't materialise>",
-      "bear": "<if risks do materialise>",
-      "watch_triggers": ["<trigger>"]
+      "watch": ["<Specific warning trigger with threshold>"]
     }
   },
-  "bull_case": { "thesis": "<paragraph>", "target_upside": "<X%>" },
-  "bear_case": { "thesis": "<paragraph>", "target_downside": "<X%>" },
-  "peer_comparison": [
-    { "symbol": "<SYMBOL>", "name": "<name>", "overall_score": <0-100>, "vs_this": "<better/worse/similar>" }
-  ]
+
+  "bull_case_thesis": {
+    "narrative": "<2 paragraphs telling the complete bull story. Why should an investor own this? Business strength → growth catalysts → valuation opportunity → macro tailwinds. Cite specific numbers. Conclude with return potential over 2-3 years.>",
+    "return_target": "<percentage, e.g. '25-35%'>",
+    "key_catalysts": [
+      {"catalyst": "<Specific event or milestone>", "timeframe": "<6-12mo / 1-2yr / 2-3yr>"}
+    ]
+  },
+
+  "bear_case_thesis": {
+    "narrative": "<2 paragraphs telling the complete bear story. Why avoid? Moat erosion → growth deceleration → valuation compression → macro headwinds. Cite specific numbers. Conclude with downside risk.>",
+    "return_target": "<percentage, typically negative, e.g. '-15 to -25%'>",
+    "key_risks": [
+      {"risk": "<Event or data point confirming bear thesis>", "timeframe": "<6-12mo / 1-2yr / 2-3yr>"}
+    ]
+  },
+
+  "catalysts": [
+    {
+      "event": "<Specific upcoming event>",
+      "timeframe": "<Expected timing>",
+      "impact_if_positive": "<How this helps>",
+      "impact_if_negative": "<How this hurts>"
+    }
+  ],
+
+  "peer_comparison": {
+    "narrative": "<1-2 paragraphs comparing to 2-4 peers. Who is best-in-sector? Who is cheapest? On a growth-adjusted basis, where does this stock rank? Is there a better alternative?>",
+    "peers": [
+      {
+        "symbol": "<SYMBOL>",
+        "name": "<Full name>",
+        "comparison": "<1-2 sentences: How does this peer compare on key metrics? Why buy this stock instead of the peer, or vice versa?>",
+        "metrics": {"pe": "<Xnumber>", "roe": "<X%>", "growth": "<X%>", "dividend_yield": "<X%>"}
+      }
+    ]
+  },
+
+  "recommendation": {
+    "action": "<BUY / HOLD / AVOID>",
+    "qualifier": "<Qualify: 'BUY on dips below ₹X' or 'HOLD with ₹X target' or 'AVOID until Y improves'>",
+    "key_metrics_to_track": [
+      "<Specific metric with target: 'Quarterly earnings growth >12% to justify 18x P/E'>",
+      "<Specific metric with target: 'Operating margin >12% confirms quality growth'>",
+      "<Specific metric with target: 'FCF conversion >70% validates earnings quality'>",
+      "<Specific metric with target: 'D/E ratio <1.0x maintains financial flexibility'>"
+    ]
+  }
 }
 
-RULES:
-- SCORING: The overall_score MUST equal quant_base_score + score_adjustment. Do NOT ignore the quant base.
-- Section scores should reflect the quant component scores as anchors (e.g., if profitability quant = 35, profitability_growth section should be near 35 ± 10).
-- Each section MUST have 3-4 findings with supporting_data referencing actual numbers from the data above.
-- Scores: 0-30 = poor, 31-50 = below average, 51-70 = average, 71-85 = good, 86-100 = excellent.
-- For key_investment_risks, a LOWER score means HIGHER risk (inverted — 20 = very risky, 80 = low risk).
-- vs_sector MUST reference specific actual metrics with precise numbers (e.g., "P/E 12x vs peer avg 18x", "Net Margin 15% vs sector avg 12%", "D/E 0.5x vs peer avg 0.8x").
-- vs_sector should explain BUSINESS implications, not just metric differences (e.g., "Lower leverage provides stability in downturns" or "Higher margins suggest stronger pricing power and competitive advantage").
-- Analyze margin trends: Compare Net Margin and Operating Margin. Indicate if expanding or contracting vs peers. What does this reveal about cost structure or pricing power?
-- Evaluate working capital efficiency: Current ratio, asset turnover, days receivable/payable trends. Is the company managing cash efficiently?
-- Assess capital allocation: Dividend payout ratio, capex intensity, retained earnings. How does management deploy capital?
-- Identify balance sheet quality: Debt trends, interest coverage ratios, asset composition. Is the balance sheet flexible or stressed?
-- Compare business durability: ROE consistency, ROCE vs cost of capital, economic moat indicators. Can this competitive advantage sustain?
-- All monetary values should be in INR Crores.
-- Be specific with numbers; do not say "strong" without citing the actual metric.
-- peer_comparison should include 2-4 peers from the sector peers data.
-- NO HALLUCINATIONS: If a specific peer metric is unavailable, use "N/A" rather than guessing.
-- Respond with ONLY the JSON object, no markdown, no explanation.`;
+ADDITIONAL RULES:
+- Scores: 0-30 poor, 31-50 below avg, 51-70 average, 71-85 good, 86-100 excellent.
+- Section scores should anchor to quant component scores ± 10 points.
+- key_investment_risks score is INVERTED (low score = high risk).
+- All monetary values in INR Crores.
+- peer_comparison must use actual peer data provided—NO HALLUCINATIONS. If metric unavailable, use "N/A".
+- Recommendation: 75+ BUY, 60-74 HOLD, <60 AVOID. Qualify with specific conditions.
+- Respond with ONLY the JSON object. No markdown, no explanation.`;
 }

@@ -1,66 +1,62 @@
 "use client";
 
-import { clsx } from "clsx";
-
-interface Peer {
+interface PeerItem {
   symbol: string;
   name: string;
-  overall_score: number;
-  vs_this: string;
+  comparison?: string;
+  metrics?: Record<string, string>;
+  // Legacy
+  overall_score?: number;
 }
 
 interface PeerComparisonProps {
-  peers: Peer[];
+  narrative?: string;
+  peers: PeerItem[];
   currentSymbol: string;
   currentScore: number;
 }
 
-export default function PeerComparison({ peers, currentSymbol, currentScore }: PeerComparisonProps) {
+export default function PeerComparison({ narrative, peers, currentSymbol, currentScore }: PeerComparisonProps) {
   if (!peers?.length) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <h3 className="mb-3 text-xs font-semibold text-muted uppercase tracking-wider">
+    <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">
         Peer Comparison
       </h3>
+
+      {/* Narrative */}
+      {narrative && (
+        <p className="text-xs text-foreground leading-relaxed whitespace-pre-line">{narrative}</p>
+      )}
+
+      {/* Peer Cards */}
       <div className="space-y-2">
-        {/* Current stock */}
-        <div className="flex items-center gap-3 rounded-lg bg-primary/10 p-2.5">
-          <span className="text-xs font-bold text-primary min-w-[60px]">{currentSymbol}</span>
-          <div className="flex-1">
-            <div className="h-1.5 rounded-full bg-border">
-              <div
-                className="h-full rounded-full bg-primary"
-                style={{ width: `${currentScore}%` }}
-              />
+        {peers.map((peer) => (
+          <div key={peer.symbol} className="rounded-lg bg-background p-3 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-primary">{peer.symbol}</span>
+              <span className="text-[11px] text-muted">{peer.name}</span>
+              {peer.overall_score != null && (
+                <span className="ml-auto text-xs font-medium text-foreground">{peer.overall_score}</span>
+              )}
             </div>
-          </div>
-          <span className="text-xs font-bold text-primary">{currentScore}</span>
-        </div>
-
-        {/* Peers */}
-        {peers.map((peer) => {
-          const delta = peer.overall_score - currentScore;
-          const deltaColor = delta > 0 ? "text-danger" : delta < 0 ? "text-accent" : "text-muted";
-
-          return (
-            <div key={peer.symbol} className="flex items-center gap-3 rounded-lg bg-background p-2.5">
-              <span className="text-xs font-medium text-foreground min-w-[60px]">{peer.symbol}</span>
-              <div className="flex-1">
-                <div className="h-1.5 rounded-full bg-border">
-                  <div
-                    className="h-full rounded-full bg-muted"
-                    style={{ width: `${peer.overall_score}%` }}
-                  />
-                </div>
+            {peer.comparison && (
+              <p className="text-[11px] text-foreground leading-relaxed">{peer.comparison}</p>
+            )}
+            {peer.metrics && Object.keys(peer.metrics).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(peer.metrics).map(([key, val]) => (
+                  val && val !== "N/A" ? (
+                    <span key={key} className="text-[10px] text-muted bg-surface rounded px-1.5 py-0.5">
+                      {key.replace(/_/g, " ").toUpperCase()}: <span className="text-foreground">{val}</span>
+                    </span>
+                  ) : null
+                ))}
               </div>
-              <span className="text-xs font-medium text-foreground">{peer.overall_score}</span>
-              <span className={clsx("text-[10px] font-medium min-w-[40px] text-right", deltaColor)}>
-                {delta > 0 ? "+" : ""}{delta}
-              </span>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

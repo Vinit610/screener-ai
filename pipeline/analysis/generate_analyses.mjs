@@ -478,7 +478,7 @@ async function generateForStock(stock) {
           model: "mistral-large-2411",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.2,
-          max_tokens: 4096,
+          max_tokens: 8192,
         }),
       });
 
