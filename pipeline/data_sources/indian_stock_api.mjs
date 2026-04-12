@@ -280,23 +280,39 @@ export async function fetchHistoricalTrends(symbol, period = '5yr', filters = ['
       return null;
     }
 
-    const filterQuery = filters.join(',');
-    const url = `https://stock.indianapi.in/historical_data?stock_name=${cleanSymbol}&period=${period}&filter=${filterQuery}`;
+    console.log(`[IndianAPI] Fetching trends for ${symbol} (period: ${period}, filters: ${filters.join(',')})`);
 
-    console.log(`[IndianAPI] Fetching trends for ${symbol} (period: ${period})`);
+    // API accepts a single filter per call, so fetch each filter separately and merge
+    const allDatasets = [];
+    for (const filter of filters) {
+      const url = `https://stock.indianapi.in/historical_data?stock_name=${cleanSymbol}&period=${period}&filter=${filter}`;
 
-    const response = await fetch(url, {
-      headers: { 'X-Api-Key': apiKey },
-      timeout: 10000,
-    });
+      const response = await fetch(url, {
+        headers: { 'X-Api-Key': apiKey },
+      });
 
-    if (!response.ok) {
-      console.error(`[IndianAPI] API error for ${symbol}: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        console.warn(`[IndianAPI] API error for ${symbol} filter=${filter}: ${response.status} ${response.statusText}`);
+        continue;
+      }
+
+      const data = await response.json();
+      if (data?.datasets) {
+        allDatasets.push(...data.datasets);
+      }
+
+      // Small delay between calls to avoid rate limiting
+      if (filters.indexOf(filter) < filters.length - 1) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+
+    if (allDatasets.length === 0) {
+      console.warn(`[IndianAPI] No valid data from any filter for ${symbol}`);
       return null;
     }
 
-    const rawData = await response.json();
-    const compactedTrends = compactTrendMetrics(rawData, cleanSymbol);
+    const compactedTrends = compactTrendMetrics({ datasets: allDatasets }, cleanSymbol);
     if (!compactedTrends) {
       console.warn(`[IndianAPI] No valid trends extracted for ${symbol}`);
       return null;
