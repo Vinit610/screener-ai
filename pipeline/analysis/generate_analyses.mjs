@@ -503,6 +503,9 @@ async function generateForStock(stock) {
         text = jsonMatch[0];
       }
 
+      // Sanitize invalid JSON: remove + prefix on numbers (e.g. +10 → 10)
+      text = text.replace(/:\s*\+(\d)/g, ": $1");
+
       analysisJson = JSON.parse(text);
       break;
     } catch (err) {
