@@ -281,7 +281,7 @@ export async function fetchHistoricalTrends(symbol, period = '5yr', filters = ['
     }
 
     const filterQuery = filters.join(',');
-    const url = `https://stock.indianapi.in/historical_data?symbol=${cleanSymbol}&period=${period}&filter=${filterQuery}`;
+    const url = `https://stock.indianapi.in/historical_data?stock_name=${cleanSymbol}&period=${period}&filter=${filterQuery}`;
 
     console.log(`[IndianAPI] Fetching trends for ${symbol} (period: ${period})`);
 
