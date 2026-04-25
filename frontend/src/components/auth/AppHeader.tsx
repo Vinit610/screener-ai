@@ -28,7 +28,7 @@ export default function AppHeader() {
           >
             Screener
           </a>
-          <a
+          {/* <a
             href="/mf"
             className="text-xs text-muted transition hover:text-white"
           >
@@ -39,7 +39,7 @@ export default function AppHeader() {
             className="text-xs text-muted transition hover:text-white"
           >
             Compare
-          </a>
+          </a> */}
           {user && (
             <>
               <a
