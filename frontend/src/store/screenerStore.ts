@@ -22,7 +22,32 @@ export interface ScreenerState {
   resetFilters: () => void
 }
 
+/**
+ * Semantic valuation ranges (Nifty500 context)
+ * Based on typical Nifty500 distributions and Indian investor mindsets
+ */
+const VALUATION_RANGES = {
+  pe: {
+    cheap: [0, 15],
+    fair: [15, 22],
+    expensive: [22, 100],
+  },
+  pb: {
+    cheap: [0, 1.2],
+    fair: [1.2, 2.0],
+    expensive: [2.0, 20],
+  },
+  dividend_yield: {
+    high: [2, 15],    // >= 2% is high yield
+    moderate: [1, 2], // 1-2% is moderate
+    any: [0, 15],     // no filter
+  },
+}
+
 const defaultFilters: ScreenerFilters = {
+  pe_semantic: 'any',
+  pb_semantic: 'any',
+  dividend_yield_semantic: 'any',
   pe: [0, 100],
   pb: [0, 20],
   dividend_yield: [0, 15],
@@ -30,9 +55,25 @@ const defaultFilters: ScreenerFilters = {
   roce: [0, 100],
   debt_to_equity: [0, 5],
   net_margin: [-50, 50],
+  quality_gate: false,
   market_cap_category: undefined,
   sector: undefined,
   exclude_loss_making: undefined,
+}
+
+/**
+ * Map semantic valuation to actual ranges.
+ * Used when constructing API queries.
+ */
+function semanticToRange(
+  semantic: 'any' | 'cheap' | 'fair' | 'expensive',
+  buckets: { cheap?: [number, number]; fair?: [number, number]; expensive?: [number, number]; high?: [number, number]; moderate?: [number, number]; any?: [number, number] }
+): [number, number] {
+  if (semantic === 'any') return buckets.any || [0, 1000]
+  if (semantic === 'cheap' && buckets.cheap) return buckets.cheap
+  if (semantic === 'fair' && buckets.fair) return buckets.fair
+  if (semantic === 'expensive' && buckets.expensive) return buckets.expensive
+  return buckets.any || [0, 1000]
 }
 
 import { getBackendUrl } from '@/lib/api'
@@ -41,8 +82,7 @@ import { getBackendUrl } from '@/lib/api'
  * Convert the local filter state into query-parameter pairs that match the
  * backend `GET /api/stocks/screen` interface.
  *
- * Range filters are only sent when they differ from defaults so we don't clamp
- * the query unnecessarily.
+ * Handles semantic valuation mapping and quality gate constraints.
  */
 function filtersToSearchParams(
   f: ScreenerFilters,
@@ -53,7 +93,12 @@ function filtersToSearchParams(
 ): URLSearchParams {
   const params = new URLSearchParams()
 
-  // Range helpers — only include non-default bounds
+  // Map semantic valuations to actual ranges
+  const pe = semanticToRange(f.pe_semantic, VALUATION_RANGES.pe)
+  const pb = semanticToRange(f.pb_semantic, VALUATION_RANGES.pb)
+  const dy = semanticToRange(f.dividend_yield_semantic, VALUATION_RANGES.dividend_yield)
+
+  // Helper to only include non-default range bounds
   const rangeParam = (
     name: string,
     value: [number, number],
@@ -63,24 +108,28 @@ function filtersToSearchParams(
     if (value[1] !== defaultRange[1]) params.set(`max_${name}`, String(value[1]))
   }
 
-  rangeParam('pe', f.pe, defaultFilters.pe)
-  rangeParam('pb', f.pb, defaultFilters.pb)
-  rangeParam('roe', f.roe, defaultFilters.roe)
-  rangeParam('roce', f.roce, defaultFilters.roce)
+  // Apply semantic valuations
+  rangeParam('pe', pe, [0, 100])
+  rangeParam('pb', pb, [0, 20])
+  rangeParam('dividend_yield', dy, [0, 15])
 
-  // debt_to_equity — backend only has max_debt_to_equity
-  if (f.debt_to_equity[1] !== defaultFilters.debt_to_equity[1]) {
-    params.set('max_debt_to_equity', String(f.debt_to_equity[1]))
+  // Quality gate: apply strict thresholds if enabled
+  if (f.quality_gate) {
+    params.set('min_roe', '15')
+    params.set('min_roce', '15')
+    params.set('max_debt_to_equity', '2.0')
+  } else {
+    // Otherwise use user's selected ranges
+    rangeParam('roe', f.roe, defaultFilters.roe)
+    rangeParam('roce', f.roce, defaultFilters.roce)
+    if (f.debt_to_equity[1] !== defaultFilters.debt_to_equity[1]) {
+      params.set('max_debt_to_equity', String(f.debt_to_equity[1]))
+    }
   }
 
-  // net_margin — backend only has min_net_margin
+  // Net margin (optional)
   if (f.net_margin[0] !== defaultFilters.net_margin[0]) {
     params.set('min_net_margin', String(f.net_margin[0]))
-  }
-
-  // dividend_yield — backend only has min_dividend_yield
-  if (f.dividend_yield[0] !== defaultFilters.dividend_yield[0]) {
-    params.set('min_dividend_yield', String(f.dividend_yield[0]))
   }
 
   if (f.market_cap_category) params.set('market_cap_category', f.market_cap_category)

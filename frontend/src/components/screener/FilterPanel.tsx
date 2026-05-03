@@ -1,8 +1,8 @@
 "use client";
 
 import { useScreenerStore } from "@/store/screenerStore";
-import FilterSection from "./FilterSection";
-import FilterSlider from "./FilterSlider";
+import SemanticSelector from "./SemanticSelector";
+import QualityGate from "./QualityGate";
 import type { ScreenerFilters } from "@/types";
 
 const SECTOR_OPTIONS = [
@@ -16,19 +16,6 @@ const SECTOR_OPTIONS = [
   "Cement",
   "Realty",
   "Chemicals",
-  "Telecom",
-  "Infrastructure",
-  "Consumer Durables",
-  "Financial Services",
-  "Media",
-  "Textiles",
-];
-
-const MARKET_CAP_OPTIONS = [
-  { label: "Large", value: "large" },
-  { label: "Mid", value: "mid" },
-  { label: "Small", value: "small" },
-  { label: "Micro", value: "micro" },
 ] as const;
 
 export default function FilterPanel() {
@@ -39,115 +26,133 @@ export default function FilterPanel() {
   const update = (partial: Partial<ScreenerFilters>) => setFilters(partial);
 
   return (
-    <aside className="flex w-full flex-col gap-1 overflow-y-auto rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-sm font-bold text-foreground">Filters</h2>
+    <aside className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+      {/* Header with Reset */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-foreground">Filters</h2>
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="text-xs text-muted hover:text-foreground transition underline"
+        >
+          Reset
+        </button>
+      </div>
 
-      {/* Size — Market Cap Category */}
-      <FilterSection title="Size" defaultOpen>
+      {/* Sector Pills */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold text-foreground">Sector</label>
         <div className="flex flex-wrap gap-2">
-          {MARKET_CAP_OPTIONS.map((opt) => {
-            const active = filters.market_cap_category === opt.value;
+          <button
+            type="button"
+            onClick={() => update({ sector: undefined })}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              !filters.sector
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted hover:border-muted"
+            }`}
+          >
+            All
+          </button>
+          {SECTOR_OPTIONS.map((sector) => {
+            const active = filters.sector === sector;
             return (
               <button
-                key={opt.value}
+                key={sector}
                 type="button"
                 onClick={() =>
-                  update({
-                    market_cap_category: active ? undefined : opt.value,
-                  })
+                  update({ sector: active ? undefined : sector })
                 }
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                   active
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted hover:border-muted"
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border text-muted hover:border-muted"
                 }`}
               >
-                {opt.label}
+                {sector}
               </button>
             );
           })}
         </div>
-      </FilterSection>
+      </div>
 
-      {/* Sector */}
-      <FilterSection title="Sector" defaultOpen={false}>
-        <select
-          value={filters.sector ?? ""}
-          onChange={(e) =>
-            update({ sector: e.target.value || undefined })
-          }
-          className="w-full rounded border border-border bg-surface px-2 py-1.5 text-xs text-foreground"
-        >
-          <option value="">All Sectors</option>
-          {SECTOR_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </FilterSection>
+      <hr className="border-border" />
 
-      {/* Valuation */}
-      <FilterSection title="Valuation">
-        <FilterSlider
-          label="PE Ratio"
-          min={0}
-          max={100}
-          step={0.5}
-          value={filters.pe}
-          onChange={(pe) => update({ pe })}
-        />
-        <FilterSlider
-          label="PB Ratio"
-          min={0}
-          max={20}
-          step={0.1}
-          value={filters.pb}
-          onChange={(pb) => update({ pb })}
-        />
-      </FilterSection>
+      {/* Valuation Selectors */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+          Valuation
+        </h3>
 
-      {/* Quality */}
-      <FilterSection title="Quality">
-        <FilterSlider
-          label="ROE (%)"
-          min={0}
-          max={100}
-          step={1}
-          value={filters.roe}
-          onChange={(roe) => update({ roe })}
+        <SemanticSelector
+          label="P/E Ratio"
+          description="Price relative to earnings"
+          buckets={{
+            cheap: { min: 0, max: 15 },
+            fair: { min: 15, max: 22 },
+            expensive: { min: 22, max: 100 },
+          }}
+          value={filters.pe_semantic}
+          onChange={(pe_semantic) => update({ pe_semantic })}
         />
-        <FilterSlider
-          label="ROCE (%)"
-          min={0}
-          max={100}
-          step={1}
-          value={filters.roce}
-          onChange={(roce) => update({ roce })}
-        />
-        <FilterSlider
-          label="D/E Ratio"
-          min={0}
-          max={5}
-          step={0.1}
-          value={filters.debt_to_equity}
-          onChange={(debt_to_equity) => update({ debt_to_equity })}
-        />
-        <FilterSlider
-          label="Net Margin (%)"
-          min={-50}
-          max={50}
-          step={1}
-          value={filters.net_margin}
-          onChange={(net_margin) => update({ net_margin })}
-        />
-      </FilterSection>
 
-      {/* Income */}
-      <FilterSection title="Income" defaultOpen={false}>
-        <FilterSlider
-          label="Dividend Yield (%)"
-          min={0}
+        <SemanticSelector
+          label="P/B Ratio"
+          description="Price relative to book value"
+          buckets={{
+            cheap: { min: 0, max: 1.2 },
+            fair: { min: 1.2, max: 2.0 },
+            expensive: { min: 2.0, max: 20 },
+          }}
+          value={filters.pb_semantic}
+          onChange={(pb_semantic) => update({ pb_semantic })}
+        />
+
+        <SemanticSelector
+          label="Dividend Yield"
+          description="Annual dividend as % of price"
+          buckets={{
+            cheap: { min: 2, max: 15 },
+            fair: { min: 1, max: 2 },
+            expensive: { min: 0, max: 1 },
+          }}
+          value={filters.dividend_yield_semantic}
+          onChange={(dividend_yield_semantic) => update({ dividend_yield_semantic })}
+        />
+      </div>
+
+      <hr className="border-border" />
+
+      {/* Quality Gate */}
+      <div className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+          Quality
+        </h3>
+        <QualityGate
+          checked={filters.quality_gate ?? false}
+          onChange={(quality_gate) => update({ quality_gate })}
+        />
+      </div>
+
+      <hr className="border-border" />
+
+      {/* Other Filters */}
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={filters.exclude_loss_making ?? false}
+            onChange={(e) =>
+              update({ exclude_loss_making: e.target.checked || undefined })
+            }
+            className="rounded border-border accent-primary"
+          />
+          Exclude loss-making companies
+        </label>
+      </div>
+    </aside>
+  );
+}
           max={15}
           step={0.1}
           value={filters.dividend_yield}

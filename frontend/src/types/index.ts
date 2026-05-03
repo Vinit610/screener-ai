@@ -102,18 +102,27 @@ export interface UserProfile {
 
 // Filter Types
 export type MarketCapCategory = 'large' | 'mid' | 'small' | 'micro'
+export type SemanticValuation = 'any' | 'cheap' | 'fair' | 'expensive'
 
 export interface ScreenerFilters {
-  // Valuation filters
+  // Valuation filters — now semantic
+  pe_semantic: SemanticValuation
+  pb_semantic: SemanticValuation
+  dividend_yield_semantic: SemanticValuation
+
+  // Legacy range filters (kept for backward compat, derived from semantic)
   pe: [number, number]
   pb: [number, number]
   dividend_yield: [number, number]
 
-  // Quality filters
+  // Quality filters (legacy, kept for consistency)
   roe: [number, number]
   roce: [number, number]
   debt_to_equity: [number, number]
   net_margin: [number, number]
+
+  // Quality gate (replaces individual quality filters)
+  quality_gate: boolean
 
   // Size filters (category‐based, matches backend query param)
   market_cap_category?: MarketCapCategory
