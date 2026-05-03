@@ -39,6 +39,34 @@ export default function FilterPanel() {
         </button>
       </div>
 
+      {/* Market Cap Category Pills */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold text-foreground">Size</label>
+        <div className="flex flex-wrap gap-2">
+          {(["large", "mid", "small", "micro"] as const).map((cap) => {
+            const active = filters.market_cap_category === cap;
+            return (
+              <button
+                key={cap}
+                type="button"
+                onClick={() =>
+                  update({ market_cap_category: active ? undefined : cap })
+                }
+                className={`rounded-full px-3 py-1 text-xs font-medium transition capitalize ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border text-muted hover:border-muted"
+                }`}
+              >
+                {cap}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <hr className="border-border" />
+
       {/* Sector Pills */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-foreground">Sector</label>
