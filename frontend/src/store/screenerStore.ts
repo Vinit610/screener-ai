@@ -28,21 +28,25 @@ export interface ScreenerState {
  */
 const VALUATION_RANGES = {
   pe: {
-    cheap: [0, 15],
-    fair: [15, 22],
-    expensive: [22, 100],
+    cheap: [0, 15] as [number, number],
+    fair: [15, 22] as [number, number],
+    expensive: [22, 100] as [number, number],
+    any: [0, 100] as [number, number],
   },
   pb: {
-    cheap: [0, 1.2],
-    fair: [1.2, 2.0],
-    expensive: [2.0, 20],
+    cheap: [0, 1.2] as [number, number],
+    fair: [1.2, 2.0] as [number, number],
+    expensive: [2.0, 20] as [number, number],
+    any: [0, 20] as [number, number],
   },
   dividend_yield: {
-    high: [2, 15],    // >= 2% is high yield
-    moderate: [1, 2], // 1-2% is moderate
-    any: [0, 15],     // no filter
+    cheap: [2, 15] as [number, number],    // "Cheap" = high dividend yield >= 2%
+    fair: [1, 2] as [number, number],     // "Fair" = moderate yield 1-2%
+    expensive: [0, 1] as [number, number], // "Expensive" = low yield < 1%
+    any: [0, 15] as [number, number],     // no filter
   },
-}
+} as const
+
 
 const defaultFilters: ScreenerFilters = {
   pe_semantic: 'any',
@@ -66,14 +70,10 @@ const defaultFilters: ScreenerFilters = {
  * Used when constructing API queries.
  */
 function semanticToRange(
-  semantic: 'any' | 'cheap' | 'fair' | 'expensive',
-  buckets: { cheap?: [number, number]; fair?: [number, number]; expensive?: [number, number]; high?: [number, number]; moderate?: [number, number]; any?: [number, number] }
+  semantic: string,
+  buckets: Record<string, [number, number]>
 ): [number, number] {
-  if (semantic === 'any') return buckets.any || [0, 1000]
-  if (semantic === 'cheap' && buckets.cheap) return buckets.cheap
-  if (semantic === 'fair' && buckets.fair) return buckets.fair
-  if (semantic === 'expensive' && buckets.expensive) return buckets.expensive
-  return buckets.any || [0, 1000]
+  return buckets[semantic] || buckets['any'] || [0, 1000]
 }
 
 import { getBackendUrl } from '@/lib/api'
