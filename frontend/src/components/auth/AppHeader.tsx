@@ -22,12 +22,12 @@ export default function AppHeader() {
           screener-ai
         </a>
         <nav className="hidden items-center gap-3 sm:flex">
-          <a
+          {/* <a
             href="/screener"
             className="text-xs text-muted transition hover:text-white"
           >
             Screener
-          </a>
+          </a> */}
           {/* <a
             href="/mf"
             className="text-xs text-muted transition hover:text-white"
