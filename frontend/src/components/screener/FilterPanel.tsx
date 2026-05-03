@@ -153,36 +153,3 @@ export default function FilterPanel() {
     </aside>
   );
 }
-          max={15}
-          step={0.1}
-          value={filters.dividend_yield}
-          onChange={(dividend_yield) => update({ dividend_yield })}
-        />
-      </FilterSection>
-
-      {/* Other */}
-      <FilterSection title="Other" defaultOpen={false}>
-        <label className="flex items-center gap-2 text-xs text-foreground">
-          <input
-            type="checkbox"
-            checked={filters.exclude_loss_making ?? false}
-            onChange={(e) =>
-              update({ exclude_loss_making: e.target.checked || undefined })
-            }
-            className="rounded border-border accent-primary"
-          />
-          Exclude loss-making companies
-        </label>
-      </FilterSection>
-
-      {/* Reset */}
-      <button
-        type="button"
-        onClick={resetFilters}
-        className="mt-2 w-full rounded border border-border py-1.5 text-xs font-medium text-muted hover:bg-surface-hover hover:text-foreground transition"
-      >
-        Reset Filters
-      </button>
-    </aside>
-  );
-}
