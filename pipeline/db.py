@@ -1,6 +1,7 @@
 from supabase import create_client, Client
 from typing import List, Dict, Optional
 import logging
+import time
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -10,16 +11,37 @@ supabase: Client = create_client(config.supabase_url, config.supabase_service_ro
 
 # Supabase has a payload size limit; batch large upserts
 UPSERT_BATCH_SIZE = 500
+UPSERT_MAX_ATTEMPTS = 3
+UPSERT_BACKOFF_BASE = 1.0  # seconds; doubled each retry
 
 def _batched_upsert(table: str, records: List[Dict], on_conflict: str) -> None:
-    """Upsert records in batches to avoid payload size limits."""
+    """Upsert records in batches to avoid payload size limits.
+
+    Retries transient errors (e.g. httpx 'Server disconnected' from connection
+    pool churn under concurrency) with exponential backoff. Re-raises on
+    persistent failure so callers can decide how to handle it.
+    """
     for i in range(0, len(records), UPSERT_BATCH_SIZE):
         batch = records[i:i + UPSERT_BATCH_SIZE]
-        try:
-            supabase.table(table).upsert(batch, on_conflict=on_conflict).execute()
-        except Exception as e:
-            logger.error(f"Failed to upsert batch {i // UPSERT_BATCH_SIZE + 1} into {table}: {e}")
-            raise
+        attempt = 0
+        while True:
+            try:
+                supabase.table(table).upsert(batch, on_conflict=on_conflict).execute()
+                break
+            except Exception as e:
+                attempt += 1
+                if attempt >= UPSERT_MAX_ATTEMPTS:
+                    logger.error(
+                        f"Failed to upsert batch {i // UPSERT_BATCH_SIZE + 1} "
+                        f"into {table} after {attempt} attempts: {e}"
+                    )
+                    raise
+                wait = UPSERT_BACKOFF_BASE * (2 ** (attempt - 1))
+                logger.warning(
+                    f"Upsert into {table} failed (attempt {attempt}/"
+                    f"{UPSERT_MAX_ATTEMPTS}): {e}. Retrying in {wait}s."
+                )
+                time.sleep(wait)
 
 def upsert_stocks(records: List[Dict]) -> None:
     """Upsert stocks into the stocks table on conflict symbol."""
