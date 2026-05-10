@@ -30,14 +30,6 @@ interface MFDetailData {
   is_direct?: boolean | null;
   is_growth?: boolean | null;
   nav_history?: NAVPoint[];
-  returns?: {
-    return_1m?: number | null;
-    return_3m?: number | null;
-    return_6m?: number | null;
-    return_1y?: number | null;
-    return_2y?: number | null;
-    return_3y?: number | null;
-  } | null;
   sharpe_ratio?: number | null;
 }
 
@@ -69,11 +61,6 @@ function fmtCr(v: number | null | undefined): string {
   return `₹${v.toFixed(0)} Cr`;
 }
 
-function returnColor(v: number | null | undefined): "default" | "green" | "red" {
-  if (v == null) return "default";
-  return v >= 0 ? "green" : "red";
-}
-
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
@@ -102,8 +89,6 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
     filteredNavs.length > 0 ? filteredNavs[filteredNavs.length - 1].nav : 0;
   const isPositive = endNav >= startNav;
   const gradientId = `navGradient-${range}-${isPositive ? "up" : "down"}`;
-
-  const r = data.returns;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6">
@@ -165,47 +150,6 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
           />
         </div>
       </div>
-
-      {/* Rolling returns */}
-      {r && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold text-white">
-            Rolling Returns
-          </h2>
-          <div className="flex flex-wrap gap-4">
-            <Metric
-              label="1M"
-              value={r.return_1m != null ? `${fmt(r.return_1m)}%` : "–"}
-              color={returnColor(r.return_1m)}
-            />
-            <Metric
-              label="3M"
-              value={r.return_3m != null ? `${fmt(r.return_3m)}%` : "–"}
-              color={returnColor(r.return_3m)}
-            />
-            <Metric
-              label="6M"
-              value={r.return_6m != null ? `${fmt(r.return_6m)}%` : "–"}
-              color={returnColor(r.return_6m)}
-            />
-            <Metric
-              label="1Y"
-              value={r.return_1y != null ? `${fmt(r.return_1y)}%` : "–"}
-              color={returnColor(r.return_1y)}
-            />
-            <Metric
-              label="2Y"
-              value={r.return_2y != null ? `${fmt(r.return_2y)}%` : "–"}
-              color={returnColor(r.return_2y)}
-            />
-            <Metric
-              label="3Y"
-              value={r.return_3y != null ? `${fmt(r.return_3y)}%` : "–"}
-              color={returnColor(r.return_3y)}
-            />
-          </div>
-        </div>
-      )}
 
       {/* NAV Chart */}
       {navs.length > 0 ? (

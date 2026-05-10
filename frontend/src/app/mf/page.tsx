@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { getBackendUrl } from "@/lib/api";
 
 interface MFFilters {
-  category?: string;
   fund_house?: string;
   max_expense_ratio?: number;
   min_aum_cr?: number;
@@ -50,7 +49,7 @@ export default function MFPage() {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filters.category) params.set("category", filters.category);
+      params.set("category", "Equity");
       if (filters.fund_house) params.set("fund_house", filters.fund_house);
       if (filters.max_expense_ratio != null)
         params.set("max_expense_ratio", String(filters.max_expense_ratio));
@@ -106,7 +105,7 @@ export default function MFPage() {
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-white">Mutual Funds</h1>
+          <h1 className="text-lg font-bold text-white">Equity Mutual Funds</h1>
           <span className="text-xs text-muted">
             {total} fund{total !== 1 ? "s" : ""} found
           </span>

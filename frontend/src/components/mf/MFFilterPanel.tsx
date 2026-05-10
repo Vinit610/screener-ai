@@ -4,7 +4,6 @@ import { useState } from "react";
 
 interface MFFilterPanelProps {
   filters: {
-    category?: string;
     fund_house?: string;
     max_expense_ratio?: number;
     min_aum_cr?: number;
@@ -13,14 +12,6 @@ interface MFFilterPanelProps {
   onChange: (filters: MFFilterPanelProps["filters"]) => void;
   onReset: () => void;
 }
-
-const CATEGORIES = [
-  "Equity",
-  "Debt",
-  "Hybrid",
-  "Solution Oriented",
-  "Other",
-];
 
 export default function MFFilterPanel({
   filters,
@@ -36,25 +27,6 @@ export default function MFFilterPanel({
   return (
     <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
       <h3 className="text-sm font-semibold text-white">Filters</h3>
-
-      {/* Category */}
-      <div>
-        <label className="mb-1 block text-xs text-muted">Category</label>
-        <select
-          value={filters.category ?? ""}
-          onChange={(e) =>
-            update({ category: e.target.value || undefined })
-          }
-          className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-white focus:border-primary focus:outline-none"
-        >
-          <option value="">All Categories</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </div>
 
       {/* Fund House */}
       <div>
