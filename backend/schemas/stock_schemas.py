@@ -128,6 +128,7 @@ class RollingReturns(BaseModel):
     return_3m: Optional[float] = None
     return_6m: Optional[float] = None
     return_1y: Optional[float] = None
+    return_2y: Optional[float] = None
     return_3y: Optional[float] = None
 
 

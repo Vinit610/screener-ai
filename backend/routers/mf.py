@@ -24,6 +24,42 @@ _RISK_FREE_DAILY = 0.065 / 252  # 6.5% annualised → daily
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optional[float]]:
+    """
+    Fetch NAVs and compute rolling returns + sharpe ratio for a fund.
+    Returns (RollingReturns, sharpe_ratio) or (None, None) if N/A.
+    """
+    try:
+        from datetime import date, timedelta
+        cutoff = (date.today() - timedelta(days=365 * 3 + 10)).isoformat()
+        navs_resp = (
+            supabase.table("mf_navs")
+            .select("date,nav")
+            .eq("fund_id", fund_id)
+            .gte("date", cutoff)
+            .order("date", desc=False)
+            .execute()
+        )
+        nav_rows = navs_resp.data or []
+        
+        if len(nav_rows) < 30:
+            return (None, None)
+        
+        returns = RollingReturns(
+            return_1m=_rolling_return(nav_rows, 21),
+            return_3m=_rolling_return(nav_rows, 63),
+            return_6m=_rolling_return(nav_rows, 126),
+            return_1y=_rolling_return(nav_rows, 252),
+            return_2y=_rolling_return(nav_rows, 504),
+            return_3y=_rolling_return(nav_rows, 756),
+        )
+        sharpe = _sharpe_ratio(nav_rows)
+        return (returns, sharpe)
+    except Exception as e:
+        logger.debug(f"Failed to compute performance for fund_id {fund_id}: {e}")
+        return (None, None)
+
+
 def _rolling_return(navs: list[dict], days: int) -> Optional[float]:
     """
     Compute (current_nav - nav_N_days_ago) / nav_N_days_ago * 100.
@@ -125,7 +161,17 @@ def screen_mf(
     data = resp.data or []
     total = resp.count or 0
 
-    result = {"data": data, "total": total, "page": page, "limit": limit}
+    # Enrich each fund with performance metrics
+    enriched_data = []
+    for fund in data:
+        returns, sharpe = _get_fund_performance(fund["id"])
+        enriched_data.append({
+            **fund,
+            "returns": returns.model_dump() if returns else None,
+            "sharpe_ratio": sharpe,
+        })
+
+    result = {"data": enriched_data, "total": total, "page": page, "limit": limit}
     set_cache(cache_key, result, ex=3600)  # 1 hour
     return result
 
@@ -170,15 +216,15 @@ def get_mf(scheme_code: str):
         return_3m=_rolling_return(nav_rows, 63),
         return_6m=_rolling_return(nav_rows, 126),
         return_1y=_rolling_return(nav_rows, 252),
+        return_2y=_rolling_return(nav_rows, 504),
         return_3y=_rolling_return(nav_rows, 756),
     )
 
     # Sharpe ratio (uses full 3Y window)
     sharpe = _sharpe_ratio(nav_rows)
 
-    # Only return last 365 days of NAVs to frontend (for chart)
-    chart_cutoff = (date.today() - timedelta(days=365)).isoformat()
-    nav_history = [n for n in nav_rows if n["date"] >= chart_cutoff]
+    # Return all available NAVs to frontend (need full 3Y for user timeframe selection)
+    nav_history = nav_rows
 
     result = {
         **fund,

@@ -35,6 +35,7 @@ interface MFDetailData {
     return_3m?: number | null;
     return_6m?: number | null;
     return_1y?: number | null;
+    return_2y?: number | null;
     return_3y?: number | null;
   } | null;
   sharpe_ratio?: number | null;
@@ -44,13 +45,15 @@ interface MFDetailClientProps {
   data: MFDetailData;
 }
 
-type TimeRange = "1M" | "3M" | "6M" | "1Y" | "MAX";
+type TimeRange = "1M" | "3M" | "6M" | "1Y" | "2Y" | "3Y" | "MAX";
 
 const RANGE_DAYS: Record<TimeRange, number | null> = {
   "1M": 30,
   "3M": 90,
   "6M": 180,
   "1Y": 365,
+  "2Y": 730,
+  "3Y": 1095,
   MAX: null,
 };
 
@@ -189,6 +192,11 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
               label="1Y"
               value={r.return_1y != null ? `${fmt(r.return_1y)}%` : "–"}
               color={returnColor(r.return_1y)}
+            />
+            <Metric
+              label="2Y"
+              value={r.return_2y != null ? `${fmt(r.return_2y)}%` : "–"}
+              color={returnColor(r.return_2y)}
             />
             <Metric
               label="3Y"

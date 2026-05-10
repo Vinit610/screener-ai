@@ -16,7 +16,11 @@ interface MFCardProps {
     is_direct?: boolean | null;
     is_growth?: boolean | null;
     returns?: {
+      return_1m?: number | null;
+      return_3m?: number | null;
+      return_6m?: number | null;
       return_1y?: number | null;
+      return_2y?: number | null;
       return_3y?: number | null;
     } | null;
     sharpe_ratio?: number | null;
