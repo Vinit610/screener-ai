@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -20,18 +21,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _RISK_FREE_DAILY = 0.065 / 252  # 6.5% annualised → daily
+_NAV_WINDOW_DAYS = 365 * 5 + 10  # fetch up to 5y so 3y returns have headroom
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optional[float]]:
     """
-    Fetch NAVs and compute rolling returns + sharpe ratio for a fund.
+    Fetch NAVs and compute trailing returns + sharpe ratio for a fund.
     Returns (RollingReturns, sharpe_ratio) or (None, None) if N/A.
     """
     try:
-        from datetime import date, timedelta
-        cutoff = (date.today() - timedelta(days=365 * 3 + 10)).isoformat()
+        cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
         navs_resp = (
             supabase.table("mf_navs")
             .select("date,nav")
@@ -41,17 +42,17 @@ def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optio
             .execute()
         )
         nav_rows = navs_resp.data or []
-        
+
         if len(nav_rows) < 30:
             return (None, None)
-        
+
         returns = RollingReturns(
-            return_1m=_rolling_return(nav_rows, 21),
-            return_3m=_rolling_return(nav_rows, 63),
-            return_6m=_rolling_return(nav_rows, 126),
-            return_1y=_rolling_return(nav_rows, 252),
-            return_2y=_rolling_return(nav_rows, 504),
-            return_3y=_rolling_return(nav_rows, 756),
+            return_1m=_trailing_return(nav_rows, 30),
+            return_3m=_trailing_return(nav_rows, 91),
+            return_6m=_trailing_return(nav_rows, 182),
+            return_1y=_trailing_return(nav_rows, 365),
+            return_2y=_trailing_return(nav_rows, 730),
+            return_3y=_trailing_return(nav_rows, 1095),
         )
         sharpe = _sharpe_ratio(nav_rows)
         return (returns, sharpe)
@@ -60,16 +61,34 @@ def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optio
         return (None, None)
 
 
-def _rolling_return(navs: list[dict], days: int) -> Optional[float]:
+def _trailing_return(navs: list[dict], calendar_days: int) -> Optional[float]:
     """
-    Compute (current_nav - nav_N_days_ago) / nav_N_days_ago * 100.
+    (latest_nav - nav_on_or_after(today - N days)) / nav_on_or_after(...) * 100.
+
+    Uses calendar-date lookup so the result is robust to holidays, weekends,
+    and uneven NAV coverage. Returns None when no NAV exists at or before the
+    target date (i.e. fund history is shorter than the requested window).
+
     navs must be sorted ascending by date.
     """
-    if len(navs) < days + 1:
+    if not navs:
         return None
+    target_iso = (date.today() - timedelta(days=calendar_days)).isoformat()
+    # Find the first NAV with date >= target_iso (binary search).
+    lo, hi = 0, len(navs)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if navs[mid]["date"] < target_iso:
+            lo = mid + 1
+        else:
+            hi = mid
+    if lo >= len(navs):
+        return None
+    nav_past = navs[lo]["nav"]
     nav_recent = navs[-1]["nav"]
-    nav_past = navs[-(days + 1)]["nav"]
-    if nav_past == 0:
+    if not nav_past or nav_past == 0:
+        return None
+    if navs[lo]["date"] == navs[-1]["date"]:
         return None
     return round((nav_recent - nav_past) / nav_past * 100, 2)
 
@@ -197,9 +216,8 @@ def get_mf(scheme_code: str):
         raise HTTPException(status_code=404, detail=f"Fund '{scheme_code}' not found")
     fund = fund_resp.data
 
-    # Fetch last ~3 years of NAVs (needed for 3Y return + Sharpe)
-    from datetime import date, timedelta
-    cutoff = (date.today() - timedelta(days=365 * 3 + 10)).isoformat()
+    # Fetch up to 5y of NAVs so the chart MAX range and 3Y return have headroom.
+    cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
     navs_resp = (
         supabase.table("mf_navs")
         .select("date,nav")
@@ -210,14 +228,14 @@ def get_mf(scheme_code: str):
     )
     nav_rows = navs_resp.data or []
 
-    # Compute rolling returns
+    # Compute trailing returns
     returns = RollingReturns(
-        return_1m=_rolling_return(nav_rows, 21),
-        return_3m=_rolling_return(nav_rows, 63),
-        return_6m=_rolling_return(nav_rows, 126),
-        return_1y=_rolling_return(nav_rows, 252),
-        return_2y=_rolling_return(nav_rows, 504),
-        return_3y=_rolling_return(nav_rows, 756),
+        return_1m=_trailing_return(nav_rows, 30),
+        return_3m=_trailing_return(nav_rows, 91),
+        return_6m=_trailing_return(nav_rows, 182),
+        return_1y=_trailing_return(nav_rows, 365),
+        return_2y=_trailing_return(nav_rows, 730),
+        return_3y=_trailing_return(nav_rows, 1095),
     )
 
     # Sharpe ratio (uses full 3Y window)
