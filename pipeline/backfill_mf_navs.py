@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 MFAPI_URL = "https://api.mfapi.in/mf/{scheme_code}"
 DEFAULT_YEARS = 5
-DEFAULT_WORKERS = 8
+DEFAULT_WORKERS = 4
 SUPABASE_PAGE_SIZE = 1000
 MFAPI_TIMEOUT = 30
 
@@ -52,21 +52,6 @@ def fetch_equity_funds() -> List[Dict]:
             break
         start += SUPABASE_PAGE_SIZE
     return all_rows
-
-
-def fetch_min_existing_date(fund_id: str) -> Optional[date]:
-    """Earliest existing date in mf_navs for this fund, or None."""
-    resp = (
-        supabase.table('mf_navs')
-        .select('date')
-        .eq('fund_id', fund_id)
-        .order('date', desc=False)
-        .limit(1)
-        .execute()
-    )
-    if resp.data:
-        return datetime.strptime(resp.data[0]['date'], '%Y-%m-%d').date()
-    return None
 
 
 def fetch_mfapi_history(scheme_code: str) -> List[Dict]:
@@ -95,13 +80,17 @@ def parse_nav(s: str) -> Optional[float]:
 
 
 def process_fund(fund: Dict, cutoff: date, dry_run: bool) -> Dict:
-    """Fetch + upsert missing NAVs for one fund. Always returns a stats dict."""
+    """Fetch + upsert NAVs for one fund. Always returns a stats dict.
+
+    Upserts every MFAPI row within the cutoff window. The unique index on
+    (fund_id, date) makes this idempotent — re-runs are safe and naturally
+    fill any gaps left by the daily fetcher.
+    """
     fund_id = fund['id']
     scheme_code = fund['scheme_code']
     stats = {'scheme_code': scheme_code, 'inserted': 0, 'fetched': 0, 'error': None}
 
     try:
-        existing_min = fetch_min_existing_date(fund_id)
         history = fetch_mfapi_history(scheme_code)
         stats['fetched'] = len(history)
 
@@ -112,9 +101,6 @@ def process_fund(fund: Dict, cutoff: date, dry_run: bool) -> Dict:
             if not d or nav is None:
                 continue
             if d < cutoff:
-                continue
-            # Resumability: only insert dates older than what we already have.
-            if existing_min and d >= existing_min:
                 continue
             records.append({
                 'fund_id': fund_id,
