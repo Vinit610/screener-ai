@@ -1,0 +1,52 @@
+name: Backfill MF NAVs (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 'History depth in years'
+        required: false
+        default: '5'
+      limit:
+        description: 'Process only first N funds (blank = all). Useful for smoke testing.'
+        required: false
+        default: ''
+      workers:
+        description: 'Parallel worker count'
+        required: false
+        default: '8'
+      dry_run:
+        description: 'Fetch and log counts; skip upserts'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r pipeline/requirements.txt
+      - name: Run backfill
+        working-directory: pipeline
+        env:
+          PIPELINE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          PIPELINE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          ARGS="--years ${{ inputs.years }} --workers ${{ inputs.workers }}"
+          if [ -n "${{ inputs.limit }}" ]; then
+            ARGS="$ARGS --limit ${{ inputs.limit }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "Running: python backfill_mf_navs.py $ARGS"
+          python backfill_mf_navs.py $ARGS
