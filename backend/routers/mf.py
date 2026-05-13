@@ -22,9 +22,38 @@ router = APIRouter()
 
 _RISK_FREE_DAILY = 0.065 / 252  # 6.5% annualised → daily
 _NAV_WINDOW_DAYS = 365 * 5 + 10  # fetch up to 5y so 3y returns have headroom
+_NAV_PAGE_SIZE = 1000  # Supabase REST caps responses at 1000 rows; paginate.
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _fetch_navs(fund_id: str, cutoff_iso: str) -> list[dict]:
+    """All NAVs for a fund within [cutoff_iso, today], sorted ASC, paginated.
+
+    Supabase's REST layer caps a single response at 1000 rows. Without
+    pagination an ASC query for a fund with >1000 daily NAVs silently drops
+    the most recent rows, which manifests in the UI as an empty 1M/3M chart
+    and stale 'most recent NAV' on longer windows.
+    """
+    all_rows: list[dict] = []
+    start = 0
+    while True:
+        resp = (
+            supabase.table("mf_navs")
+            .select("date,nav")
+            .eq("fund_id", fund_id)
+            .gte("date", cutoff_iso)
+            .order("date", desc=False)
+            .range(start, start + _NAV_PAGE_SIZE - 1)
+            .execute()
+        )
+        rows = resp.data or []
+        all_rows.extend(rows)
+        if len(rows) < _NAV_PAGE_SIZE:
+            break
+        start += _NAV_PAGE_SIZE
+    return all_rows
+
 
 def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optional[float]]:
     """
@@ -33,15 +62,7 @@ def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optio
     """
     try:
         cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
-        navs_resp = (
-            supabase.table("mf_navs")
-            .select("date,nav")
-            .eq("fund_id", fund_id)
-            .gte("date", cutoff)
-            .order("date", desc=False)
-            .execute()
-        )
-        nav_rows = navs_resp.data or []
+        nav_rows = _fetch_navs(fund_id, cutoff)
 
         if len(nav_rows) < 30:
             return (None, None)
@@ -218,15 +239,7 @@ def get_mf(scheme_code: str):
 
     # Fetch up to 5y of NAVs so the chart MAX range and 3Y return have headroom.
     cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
-    navs_resp = (
-        supabase.table("mf_navs")
-        .select("date,nav")
-        .eq("fund_id", fund["id"])
-        .gte("date", cutoff)
-        .order("date", desc=False)
-        .execute()
-    )
-    nav_rows = navs_resp.data or []
+    nav_rows = _fetch_navs(fund["id"], cutoff)
 
     # Compute trailing returns
     returns = RollingReturns(
