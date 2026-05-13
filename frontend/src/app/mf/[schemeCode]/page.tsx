@@ -12,7 +12,7 @@ async function fetchMFDetail(schemeCode: string) {
   try {
     const res = await fetch(
       `${BACKEND_URL}/api/mf/${encodeURIComponent(schemeCode)}`,
-      { next: { revalidate: 3600 } }
+      { next: { revalidate: 300 } }
     );
     if (!res.ok) return null;
     return await res.json();
