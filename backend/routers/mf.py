@@ -212,7 +212,7 @@ def screen_mf(
         })
 
     result = {"data": enriched_data, "total": total, "page": page, "limit": limit}
-    set_cache(cache_key, result, ex=3600)  # 1 hour
+    set_cache(cache_key, result, ex=300)  # 5 minutes; NAVs only refresh daily
     return result
 
 
@@ -263,5 +263,5 @@ def get_mf(scheme_code: str):
         "returns": returns.model_dump(),
         "sharpe_ratio": sharpe,
     }
-    set_cache(cache_key, result, ex=3600)
+    set_cache(cache_key, result, ex=300)
     return result

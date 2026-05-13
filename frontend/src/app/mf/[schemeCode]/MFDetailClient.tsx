@@ -61,9 +61,13 @@ function fmtCr(v: number | null | undefined): string {
   return `₹${v.toFixed(0)} Cr`;
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, withYear: boolean): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return d.toLocaleDateString("en-IN", {
+    day: withYear ? undefined : "numeric",
+    month: "short",
+    year: withYear ? "2-digit" : undefined,
+  });
 }
 
 function formatNav(v: number): string {
@@ -89,6 +93,7 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
     filteredNavs.length > 0 ? filteredNavs[filteredNavs.length - 1].nav : 0;
   const isPositive = endNav >= startNav;
   const gradientId = `navGradient-${range}-${isPositive ? "up" : "down"}`;
+  const axisWithYear = range !== "1M" && range !== "3M";
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6">
@@ -150,6 +155,58 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
           />
         </div>
       </div>
+
+      {/* About Sharpe ratio */}
+      {data.sharpe_ratio != null && (
+        <details className="rounded-lg border border-border bg-surface p-3 text-xs text-muted">
+          <summary className="cursor-pointer font-medium text-white">
+            How to read the Sharpe ratio
+          </summary>
+          <div className="mt-3 space-y-2">
+            <p>
+              Sharpe ratio measures{" "}
+              <span className="text-white">risk-adjusted return</span> — how
+              much extra return the fund delivered for each unit of
+              volatility it took on.
+            </p>
+            <p>
+              Formula: <span className="font-mono">(annualised return − 6.5% risk-free rate) ÷ annualised volatility</span>.
+              Computed from the fund&apos;s daily NAVs over the last{" "}
+              <span className="text-white">~5 years</span> (or whatever
+              history is available).
+            </p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li>
+                <span className="text-accent">Above 1</span> — fund rewarded
+                its risk well.
+              </li>
+              <li>
+                <span className="text-accent">Above 2</span> — exceptional
+                risk-adjusted performance.
+              </li>
+              <li>
+                <span className="text-muted">Around 0</span> — barely beat
+                the risk-free rate.
+              </li>
+              <li>
+                <span className="text-danger">Negative</span> — you would
+                have done better in a fixed deposit.
+              </li>
+            </ul>
+            <p>
+              Use it to{" "}
+              <span className="text-white">compare funds in the same category</span>
+              . A higher Sharpe means the fund delivered smoother returns for
+              the risk it took. It looks at the full window, so a strong
+              long-term Sharpe can co-exist with a weak recent year — always
+              cross-check with the chart.
+            </p>
+            <p className="text-muted/60">
+              Based on past performance. Not predictive of future returns.
+            </p>
+          </div>
+        </details>
+      )}
 
       {/* NAV Chart */}
       {navs.length > 0 ? (
@@ -216,7 +273,7 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
               </defs>
               <XAxis
                 dataKey="date"
-                tickFormatter={formatDate}
+                tickFormatter={(d) => formatDate(d, axisWithYear)}
                 tick={{ fill: "#888", fontSize: 10 }}
                 axisLine={{ stroke: "#222" }}
                 tickLine={false}
