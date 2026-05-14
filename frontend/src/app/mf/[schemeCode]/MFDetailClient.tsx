@@ -173,7 +173,15 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
       {/* Header */}
       <div>
         <h1 className="text-lg font-bold text-white">{data.scheme_name}</h1>
-        <p className="mt-1 text-xs text-muted">{data.fund_house}</p>
+        <p className="mt-1 text-xs text-muted">
+          {data.fund_house}
+          {m?.nav_history_start && (
+            <span className="text-muted/70">
+              {" "}
+              · track record since {fmtMonthYear(m.nav_history_start)}
+            </span>
+          )}
+        </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {data.category && <Badge label={data.category} variant="sector" />}
           {data.sub_category && (
