@@ -2,7 +2,7 @@
 Pydantic schemas for request/response shapes used in the screener API.
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Literal
+from typing import Optional, List, Any, Dict, Literal
 from datetime import date
 
 
@@ -123,6 +123,15 @@ class NAVPoint(BaseModel):
     nav: float
 
 
+class RollingWindow(BaseModel):
+    """Distribution of annualised returns over one rolling-window size."""
+    avg: Optional[float] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+    pct_above_fd: Optional[float] = None
+    count: Optional[int] = None
+
+
 class MFMetrics(BaseModel):
     """Precomputed per-fund metrics (mf_metrics table)."""
     return_1y: Optional[float] = None
@@ -140,6 +149,7 @@ class MFMetrics(BaseModel):
     max_drawdown_peak_date: Optional[str] = None
     max_drawdown_trough_date: Optional[str] = None
     max_drawdown_recovery_date: Optional[str] = None
+    rolling_returns: Optional[Dict[str, RollingWindow]] = None
     nav_history_start: Optional[str] = None
     latest_nav_date: Optional[str] = None
 
