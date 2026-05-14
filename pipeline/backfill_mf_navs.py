@@ -32,8 +32,12 @@ MFAPI_TIMEOUT = 30
 
 
 def fetch_equity_funds() -> List[Dict]:
-    """Active equity funds from mutual_funds, paginated. Includes all plan types
-    (direct/regular, growth/IDCW)."""
+    """Active direct-growth equity funds from mutual_funds, paginated.
+
+    The screener only surfaces Direct + Growth plans (cleanest NAV series,
+    lowest expense ratio, the right choice for a DIY investor), so there's no
+    point storing NAV history for the other plan variants.
+    """
     all_rows: List[Dict] = []
     start = 0
     while True:
@@ -42,6 +46,8 @@ def fetch_equity_funds() -> List[Dict]:
             .select('id,scheme_code,scheme_name')
             .eq('category', 'Equity')
             .eq('is_active', True)
+            .eq('is_direct', True)
+            .eq('is_growth', True)
             .range(start, start + SUPABASE_PAGE_SIZE - 1)
             .execute()
         )

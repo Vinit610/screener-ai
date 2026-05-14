@@ -10,7 +10,6 @@ interface MFFilters {
   fund_house?: string;
   max_expense_ratio?: number;
   min_aum_cr?: number;
-  is_direct?: boolean;
 }
 
 interface MFResult {
@@ -55,8 +54,6 @@ export default function MFPage() {
         params.set("max_expense_ratio", String(filters.max_expense_ratio));
       if (filters.min_aum_cr != null)
         params.set("min_aum_cr", String(filters.min_aum_cr));
-      if (filters.is_direct != null)
-        params.set("is_direct", String(filters.is_direct));
       params.set("page", String(page));
       params.set("limit", String(limit));
       params.set("sort_by", "aum_cr");

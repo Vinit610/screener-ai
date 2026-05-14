@@ -153,7 +153,6 @@ def screen_mf(
     fund_house: Optional[str] = Query(None),
     max_expense_ratio: Optional[float] = Query(None),
     min_aum_cr: Optional[float] = Query(None),
-    is_direct: Optional[bool] = Query(None),
     sort_by: str = Query("aum_cr"),
     sort_dir: str = Query("desc"),
     page: int = Query(1, ge=1),
@@ -166,7 +165,6 @@ def screen_mf(
         "fund_house": fund_house,
         "max_expense_ratio": max_expense_ratio,
         "min_aum_cr": min_aum_cr,
-        "is_direct": is_direct,
         "sort_by": sort_by,
         "sort_dir": sort_dir,
         "page": page,
@@ -179,7 +177,16 @@ def screen_mf(
     if cached is not None:
         return cached
 
-    sq = supabase.table("mutual_funds").select("*", count="exact").eq("is_active", True)
+    # The screener only surfaces Direct + Growth plans: one canonical row per
+    # scheme (no 4x plan-variant duplication), cleanest NAV series, and the
+    # right pick for a self-directed investor.
+    sq = (
+        supabase.table("mutual_funds")
+        .select("*", count="exact")
+        .eq("is_active", True)
+        .eq("is_direct", True)
+        .eq("is_growth", True)
+    )
 
     if category:
         sq = sq.eq("category", category)
@@ -191,8 +198,6 @@ def screen_mf(
         sq = sq.lte("expense_ratio", max_expense_ratio)
     if min_aum_cr is not None:
         sq = sq.gte("aum_cr", min_aum_cr)
-    if is_direct is not None:
-        sq = sq.eq("is_direct", is_direct)
 
     start = (page - 1) * limit
     sq = sq.order(sort_by, desc=(sort_dir == "desc")).range(start, start + limit - 1)
