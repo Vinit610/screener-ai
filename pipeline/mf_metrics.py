@@ -17,6 +17,10 @@ HISTORY_TOLERANCE_DAYS = 10    # grace for weekends / holidays / launch timing
 MIN_RETURNS_FOR_RATIO = 30     # min daily returns needed for sharpe / sortino
 TRADING_DAYS = 252
 
+FD_THRESHOLD_PCT = 6.5         # "beat a fixed deposit" bar — matches risk-free
+ROLLING_STEP_INDEX = 21        # ≈ monthly stepping through the NAV series
+MIN_ROLLING_WINDOWS = 12       # need a meaningful sample (≈1y of monthly windows)
+
 Nav = Tuple[str, float]  # (iso_date, nav), ascending by date
 
 
@@ -165,6 +169,61 @@ def max_drawdown(navs: List[Nav]) -> Dict:
         'max_drawdown_peak_date': wp_date,
         'max_drawdown_trough_date': wt_date,
         'max_drawdown_recovery_date': recovery_date,
+    }
+
+
+def rolling_returns(navs: List[Nav], window_years: int) -> Optional[Dict]:
+    """Distribution of annualised returns across every overlapping
+    `window_years`-long window in the fund's history, stepped ~monthly.
+
+    A single trailing return can be lucky timing; this shows the spread of
+    outcomes an investor actually experienced. Each window's return is
+    annualised by its *actual* span so NAV gaps don't distort it.
+
+    Returns {avg, min, max, pct_above_fd, count} (all percent), or None when
+    the fund lacks enough history for a meaningful sample.
+    """
+    if len(navs) < 2:
+        return None
+    n = len(navs)
+    window_days = window_years * 365
+    last_date = date.fromisoformat(navs[-1][0])
+    latest_start = last_date - timedelta(days=window_days)
+
+    samples: List[float] = []
+    i = 0
+    while i < n:
+        start_date = date.fromisoformat(navs[i][0])
+        if start_date > latest_start:
+            break
+        # first NAV on or after the window-end target date
+        target_iso = (start_date + timedelta(days=window_days)).isoformat()
+        lo, hi = i, n
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if navs[mid][0] < target_iso:
+                lo = mid + 1
+            else:
+                hi = mid
+        if lo >= n:
+            break
+        start_nav = navs[i][1]
+        end_nav = navs[lo][1]
+        actual_years = (date.fromisoformat(navs[lo][0]) - start_date).days / 365.0
+        if start_nav > 0 and end_nav > 0 and actual_years > 0:
+            annualised = ((end_nav / start_nav) ** (1 / actual_years) - 1) * 100
+            samples.append(annualised)
+        i += ROLLING_STEP_INDEX
+
+    if len(samples) < MIN_ROLLING_WINDOWS:
+        return None
+    above = sum(1 for r in samples if r >= FD_THRESHOLD_PCT)
+    return {
+        'avg': round(sum(samples) / len(samples), 2),
+        'min': round(min(samples), 2),
+        'max': round(max(samples), 2),
+        'pct_above_fd': round(100 * above / len(samples), 1),
+        'count': len(samples),
     }
 
 

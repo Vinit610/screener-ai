@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from mf_metrics import (  # noqa: E402
     assign_ranks,
     max_drawdown,
+    rolling_returns,
     sharpe_3y,
     sortino_3y,
     trailing_return,
@@ -119,6 +120,53 @@ class TestMaxDrawdown:
         dd = max_drawdown(navs)
         assert dd['max_drawdown'] == 0.0
         assert dd['max_drawdown_trough_date'] is None
+
+
+# ── rolling_returns ───────────────────────────────────────────────────────────
+
+class TestRollingReturns:
+    def _steady(self, years: float, daily_growth: float):
+        """A daily NAV series of `years` length growing at `daily_growth`/day."""
+        days = int(years * 365) + 1
+        navs = []
+        nav = 100.0
+        start = date(2018, 1, 1)
+        for i in range(days):
+            navs.append(((start + timedelta(days=i)).isoformat(), round(nav, 6)))
+            nav *= (1 + daily_growth)
+        return navs
+
+    def test_none_when_history_too_short(self):
+        # ~1.5y of data — not enough complete 1y windows for a sample.
+        navs = self._steady(1.5, 0.0004)
+        assert rolling_returns(navs, 1) is None
+
+    def test_steady_series_has_tight_consistent_distribution(self):
+        # 4y of perfectly steady growth → every 1y window annualises the same.
+        navs = self._steady(4, 0.0005)
+        r = rolling_returns(navs, 1)
+        assert r is not None
+        assert r['count'] >= 12
+        assert r['min'] == pytest.approx(r['max'], abs=0.5)  # no spread
+        assert r['avg'] > 0
+
+    def test_pct_above_fd_full_when_returns_clear_bar(self):
+        # ~20% annualised steady growth — every window beats the 6.5% FD bar.
+        navs = self._steady(4, 0.0005)
+        r = rolling_returns(navs, 1)
+        assert r is not None and r['pct_above_fd'] == 100.0
+
+    def test_pct_above_fd_zero_when_returns_below_bar(self):
+        # ~3.7% annualised — below the 6.5% FD bar, so 0% of windows beat it.
+        navs = self._steady(4, 0.0001)
+        r = rolling_returns(navs, 1)
+        assert r is not None and r['pct_above_fd'] == 0.0
+
+    def test_three_year_window_needs_more_history(self):
+        navs = self._steady(3.5, 0.0004)  # only 0.5y of room for 3y windows
+        assert rolling_returns(navs, 3) is None
+        navs_long = self._steady(5, 0.0004)  # 2y of room → enough windows
+        assert rolling_returns(navs_long, 3) is not None
 
 
 # ── assign_ranks ──────────────────────────────────────────────────────────────

@@ -17,6 +17,14 @@ interface NAVPoint {
   nav: number;
 }
 
+interface RollingWindow {
+  avg?: number | null;
+  min?: number | null;
+  max?: number | null;
+  pct_above_fd?: number | null;
+  count?: number | null;
+}
+
 interface MFMetrics {
   return_1y?: number | null;
   return_3y?: number | null;
@@ -33,6 +41,7 @@ interface MFMetrics {
   max_drawdown_peak_date?: string | null;
   max_drawdown_trough_date?: string | null;
   max_drawdown_recovery_date?: string | null;
+  rolling_returns?: Record<string, RollingWindow> | null;
   nav_history_start?: string | null;
   latest_nav_date?: string | null;
 }
@@ -149,6 +158,18 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
       rankRows.push({ period: "3Y", rank: m.rank_3y, peers: m.peers_3y });
     if (m.rank_5y != null && m.peers_5y != null)
       rankRows.push({ period: "5Y", rank: m.rank_5y, peers: m.peers_5y });
+  }
+
+  const rollingRows: { period: string; w: RollingWindow }[] = [];
+  if (m?.rolling_returns) {
+    for (const [key, period] of [
+      ["1y", "1Y"],
+      ["3y", "3Y"],
+      ["5y", "5Y"],
+    ] as const) {
+      const w = m.rolling_returns[key];
+      if (w && w.avg != null) rollingRows.push({ period, w });
+    }
   }
 
   const filteredNavs = useMemo(() => {
@@ -295,6 +316,91 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
           Category rank isn&apos;t shown for sectoral / thematic funds — they
           track different themes and aren&apos;t directly comparable by return.
         </p>
+      )}
+
+      {/* Rolling returns */}
+      {rollingRows.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <h2 className="text-sm font-semibold text-white">Rolling Returns</h2>
+          <p className="mt-0.5 text-[11px] text-muted">
+            Annualised return over <em>every</em> overlapping window in the
+            fund&apos;s history — not just the latest one.
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-muted">
+                  <th className="pb-1 pr-4 font-normal" />
+                  {rollingRows.map((r) => (
+                    <th key={r.period} className="pb-1 pr-4 font-medium text-white">
+                      {r.period}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="py-1 pr-4 text-muted">Average</td>
+                  {rollingRows.map((r) => (
+                    <td key={r.period} className="py-1 pr-4 font-semibold text-foreground">
+                      {fmt(r.w.avg)}%
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-1 pr-4 text-muted">Worst → Best</td>
+                  {rollingRows.map((r) => (
+                    <td key={r.period} className="py-1 pr-4 text-foreground">
+                      {fmt(r.w.min)}% → {fmt(r.w.max)}%
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-1 pr-4 text-muted">Beat 6.5% FD</td>
+                  {rollingRows.map((r) => (
+                    <td
+                      key={r.period}
+                      className={`py-1 pr-4 font-semibold ${
+                        (r.w.pct_above_fd ?? 0) >= 75
+                          ? "text-accent"
+                          : (r.w.pct_above_fd ?? 0) < 50
+                          ? "text-danger"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {fmt(r.w.pct_above_fd)}%
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <details className="mt-3 text-[11px] text-muted">
+            <summary className="cursor-pointer font-medium text-white">
+              How rolling returns work
+            </summary>
+            <div className="mt-2 space-y-2">
+              <p>
+                A single trailing return depends on when you happened to start.
+                Rolling returns slide a window across the fund&apos;s whole
+                history (stepped ~monthly) and annualise each one — so you see
+                the <span className="text-white">range of outcomes</span>{" "}
+                investors actually experienced, not one lucky or unlucky date.
+              </p>
+              <p>
+                <span className="text-white">Worst → Best</span> is the spread:
+                a tight spread means a steady fund, a wide one means timing
+                mattered a lot.{" "}
+                <span className="text-white">Beat 6.5% FD</span> is the share of
+                windows that returned more than a fixed deposit — the bar for
+                whether the equity risk paid off.
+              </p>
+              <p className="text-muted/60">
+                Based on past performance. Not predictive of future returns.
+              </p>
+            </div>
+          </details>
+        </div>
       )}
 
       {/* About Sharpe & Sortino */}

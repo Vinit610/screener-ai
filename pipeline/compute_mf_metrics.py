@@ -25,6 +25,7 @@ from mf_metrics import (
     Nav,
     assign_ranks,
     max_drawdown,
+    rolling_returns,
     sharpe_3y,
     sortino_3y,
     trailing_return,
@@ -99,6 +100,11 @@ def main():
             if len(navs) < 2:
                 skipped_no_navs += 1
                 continue
+            rolling = {}
+            for years in (1, 3, 5):
+                window = rolling_returns(navs, years)
+                if window is not None:
+                    rolling[f'{years}y'] = window
             row = {
                 'fund_id': fund['id'],
                 '_sub_category': fund.get('sub_category'),
@@ -107,6 +113,7 @@ def main():
                 'return_5y': trailing_return(navs, 5 * 365),
                 'sharpe_3y': sharpe_3y(navs),
                 'sortino_3y': sortino_3y(navs),
+                'rolling_returns': rolling,
                 'nav_history_start': navs[0][0],
                 'latest_nav_date': navs[-1][0],
                 **max_drawdown(navs),
