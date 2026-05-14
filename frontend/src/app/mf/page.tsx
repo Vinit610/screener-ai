@@ -101,12 +101,17 @@ export default function MFPage() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <h1 className="text-lg font-bold text-white">Equity Mutual Funds</h1>
           <span className="text-xs text-muted">
             {total} fund{total !== 1 ? "s" : ""} found
           </span>
         </div>
+        <p className="mb-3 text-xs text-muted">
+          Showing <span className="text-white">Direct · Growth</span> plans only
+          — lower expense ratio and cleaner compounding, the right choice for a
+          self-directed retail investor.
+        </p>
 
         {isLoading ? (
           <div className="space-y-3">
