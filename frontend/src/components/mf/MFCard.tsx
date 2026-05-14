@@ -15,15 +15,14 @@ interface MFCardProps {
     aum_cr?: number | null;
     is_direct?: boolean | null;
     is_growth?: boolean | null;
-    returns?: {
-      return_1m?: number | null;
-      return_3m?: number | null;
-      return_6m?: number | null;
+    metrics?: {
       return_1y?: number | null;
-      return_2y?: number | null;
       return_3y?: number | null;
+      return_5y?: number | null;
+      sharpe_3y?: number | null;
+      rank_3y?: number | null;
+      peers_3y?: number | null;
     } | null;
-    sharpe_ratio?: number | null;
   };
 }
 
@@ -84,22 +83,34 @@ export default function MFCard({ fund }: MFCardProps) {
         <Metric label="AUM" value={fmtCr(fund.aum_cr)} />
         <Metric
           label="1Y Return"
-          value={fund.returns?.return_1y != null ? `${fmt(fund.returns.return_1y)}%` : "–"}
-          color={returnColor(fund.returns?.return_1y)}
+          value={
+            fund.metrics?.return_1y != null
+              ? `${fmt(fund.metrics.return_1y)}%`
+              : "–"
+          }
+          color={returnColor(fund.metrics?.return_1y)}
         />
         <Metric
           label="3Y Return"
-          value={fund.returns?.return_3y != null ? `${fmt(fund.returns.return_3y)}%` : "–"}
-          color={returnColor(fund.returns?.return_3y)}
+          value={
+            fund.metrics?.return_3y != null
+              ? `${fmt(fund.metrics.return_3y)}%`
+              : "–"
+          }
+          color={returnColor(fund.metrics?.return_3y)}
         />
         <Metric
-          label="Sharpe"
-          value={fund.sharpe_ratio != null ? fmt(fund.sharpe_ratio) : "–"}
+          label="Sharpe (3Y)"
+          value={
+            fund.metrics?.sharpe_3y != null
+              ? fmt(fund.metrics.sharpe_3y)
+              : "–"
+          }
           color={
-            fund.sharpe_ratio != null
-              ? fund.sharpe_ratio >= 1
+            fund.metrics?.sharpe_3y != null
+              ? fund.metrics.sharpe_3y >= 1
                 ? "green"
-                : fund.sharpe_ratio < 0
+                : fund.metrics.sharpe_3y < 0
                 ? "red"
                 : "default"
               : "default"

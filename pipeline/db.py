@@ -73,6 +73,12 @@ def upsert_funds(records: List[Dict]) -> None:
         return
     _batched_upsert('mutual_funds', records, 'scheme_code')
 
+def upsert_mf_metrics(records: List[Dict]) -> None:
+    """Upsert precomputed fund metrics into the mf_metrics table on conflict fund_id."""
+    if not records:
+        return
+    _batched_upsert('mf_metrics', records, 'fund_id')
+
 def get_stock_id(symbol: str) -> Optional[str]:
     """Look up stock UUID by symbol."""
     try:

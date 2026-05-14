@@ -17,6 +17,26 @@ interface NAVPoint {
   nav: number;
 }
 
+interface MFMetrics {
+  return_1y?: number | null;
+  return_3y?: number | null;
+  return_5y?: number | null;
+  rank_1y?: number | null;
+  peers_1y?: number | null;
+  rank_3y?: number | null;
+  peers_3y?: number | null;
+  rank_5y?: number | null;
+  peers_5y?: number | null;
+  sharpe_3y?: number | null;
+  sortino_3y?: number | null;
+  max_drawdown?: number | null;
+  max_drawdown_peak_date?: string | null;
+  max_drawdown_trough_date?: string | null;
+  max_drawdown_recovery_date?: string | null;
+  nav_history_start?: string | null;
+  latest_nav_date?: string | null;
+}
+
 interface MFDetailData {
   id: string;
   scheme_code: string;
@@ -30,7 +50,7 @@ interface MFDetailData {
   is_direct?: boolean | null;
   is_growth?: boolean | null;
   nav_history?: NAVPoint[];
-  sharpe_ratio?: number | null;
+  metrics?: MFMetrics | null;
 }
 
 interface MFDetailClientProps {
@@ -74,9 +94,61 @@ function formatNav(v: number): string {
   return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
+function ratioColor(
+  v: number | null | undefined,
+): "default" | "green" | "red" {
+  if (v == null) return "default";
+  if (v >= 1) return "green";
+  if (v < 0) return "red";
+  return "default";
+}
+
+function fmtMonthYear(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function monthsBetween(a: string, b: string): number {
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  return Math.max(
+    0,
+    Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24 * 30.44)),
+  );
+}
+
+// "Sectoral/Thematic" funds track unrelated themes, so peer ranking by
+// return is misleading — suppress the rank section for them.
+function isSectoralThematic(subCategory: string | null | undefined): boolean {
+  return /sector|thematic/i.test(subCategory ?? "");
+}
+
 export default function MFDetailClient({ data }: MFDetailClientProps) {
   const [range, setRange] = useState<TimeRange>("1Y");
   const navs = data.nav_history ?? [];
+  const m = data.metrics;
+
+  // Sharpe/Sortino need a full 3Y window. When they're null but the fund has
+  // NAV history starting less than ~3y ago, it's because the fund is young.
+  const launchedRecently =
+    m?.nav_history_start != null &&
+    new Date(m.nav_history_start).getTime() >
+      Date.now() - 3 * 365 * 24 * 60 * 60 * 1000;
+  const ratiosUnavailable = m != null && m.sharpe_3y == null && launchedRecently;
+
+  const showRank = m != null && !isSectoralThematic(data.sub_category);
+  const rankRows: { period: string; rank: number; peers: number }[] = [];
+  if (showRank && m) {
+    if (m.rank_1y != null && m.peers_1y != null)
+      rankRows.push({ period: "1Y", rank: m.rank_1y, peers: m.peers_1y });
+    if (m.rank_3y != null && m.peers_3y != null)
+      rankRows.push({ period: "3Y", rank: m.rank_3y, peers: m.peers_3y });
+    if (m.rank_5y != null && m.peers_5y != null)
+      rankRows.push({ period: "5Y", rank: m.rank_5y, peers: m.peers_5y });
+  }
 
   const filteredNavs = useMemo(() => {
     if (!navs.length) return [];
@@ -135,71 +207,132 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
         </div>
         <div className="rounded-lg border border-border bg-surface p-3">
           <Metric
-            label="Sharpe Ratio"
-            value={data.sharpe_ratio != null ? fmt(data.sharpe_ratio) : "–"}
-            color={
-              data.sharpe_ratio != null
-                ? data.sharpe_ratio >= 1
-                  ? "green"
-                  : data.sharpe_ratio < 0
-                  ? "red"
-                  : "default"
-                : "default"
-            }
+            label="Sharpe (3Y)"
+            value={m?.sharpe_3y != null ? fmt(m.sharpe_3y) : "–"}
+            color={ratioColor(m?.sharpe_3y)}
           />
         </div>
         <div className="rounded-lg border border-border bg-surface p-3">
           <Metric
-            label="Benchmark"
-            value={data.benchmark ?? "–"}
+            label="Sortino (3Y)"
+            value={m?.sortino_3y != null ? fmt(m.sortino_3y) : "–"}
+            color={ratioColor(m?.sortino_3y)}
           />
         </div>
       </div>
 
-      {/* About Sharpe ratio */}
-      {data.sharpe_ratio != null && (
+      {/* Benchmark + Max drawdown */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <Metric label="Benchmark" value={data.benchmark ?? "–"} />
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <span className="text-xs text-muted">Max Drawdown</span>
+          <div className="mt-0.5 text-sm font-semibold text-danger">
+            {m?.max_drawdown != null ? `${fmt(m.max_drawdown)}%` : "–"}
+          </div>
+          {m?.max_drawdown != null &&
+            m.max_drawdown < 0 &&
+            m.max_drawdown_peak_date &&
+            m.max_drawdown_trough_date && (
+              <p className="mt-1 text-[11px] text-muted">
+                {fmtMonthYear(m.max_drawdown_peak_date)} →{" "}
+                {fmtMonthYear(m.max_drawdown_trough_date)} ·{" "}
+                {m.max_drawdown_recovery_date
+                  ? `recovered in ${monthsBetween(
+                      m.max_drawdown_trough_date,
+                      m.max_drawdown_recovery_date,
+                    )} mo`
+                  : "not yet recovered"}
+              </p>
+            )}
+        </div>
+      </div>
+
+      {ratiosUnavailable && (
+        <p className="text-xs text-muted">
+          Sharpe and Sortino need 3 years of history — this fund launched in{" "}
+          {fmtMonthYear(m?.nav_history_start)}, so they aren&apos;t shown yet.
+        </p>
+      )}
+
+      {/* Category rank */}
+      {showRank && rankRows.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <h2 className="text-sm font-semibold text-white">
+            Category Rank
+            {data.sub_category ? ` · ${data.sub_category}` : ""}
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-4">
+            {rankRows.map((r) => (
+              <div key={r.period} className="flex flex-col gap-0.5">
+                <span className="text-xs text-muted">{r.period} return</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {r.rank}{" "}
+                  <span className="text-muted">/ {r.peers}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            Ranked purely by trailing return against other Direct-Growth funds
+            in the same category. Risk (Sharpe, drawdown) is shown separately —
+            it isn&apos;t blended into the rank.
+          </p>
+        </div>
+      )}
+      {m != null && isSectoralThematic(data.sub_category) && (
+        <p className="text-xs text-muted">
+          Category rank isn&apos;t shown for sectoral / thematic funds — they
+          track different themes and aren&apos;t directly comparable by return.
+        </p>
+      )}
+
+      {/* About Sharpe & Sortino */}
+      {m != null && (m.sharpe_3y != null || m.sortino_3y != null) && (
         <details className="rounded-lg border border-border bg-surface p-3 text-xs text-muted">
           <summary className="cursor-pointer font-medium text-white">
-            How to read the Sharpe ratio
+            How to read Sharpe &amp; Sortino
           </summary>
           <div className="mt-3 space-y-2">
             <p>
-              Sharpe ratio measures{" "}
+              Both measure{" "}
               <span className="text-white">risk-adjusted return</span> — how
-              much extra return the fund delivered for each unit of
-              volatility it took on.
+              much extra return the fund delivered for each unit of risk —
+              computed over a fixed{" "}
+              <span className="text-white">trailing 3-year window</span> so
+              funds are comparable.
             </p>
             <p>
-              Formula: <span className="font-mono">(annualised return − 6.5% risk-free rate) ÷ annualised volatility</span>.
-              Computed from the fund&apos;s daily NAVs over the last{" "}
-              <span className="text-white">~5 years</span> (or whatever
-              history is available).
+              <span className="text-white">Sharpe</span> ={" "}
+              <span className="font-mono">
+                (3Y return − 6.5% risk-free) ÷ total volatility
+              </span>
+              . <span className="text-white">Sortino</span> uses only{" "}
+              <span className="text-white">downside</span> volatility, so it
+              doesn&apos;t penalise a fund for big up-days.
             </p>
             <ul className="ml-4 list-disc space-y-1">
               <li>
-                <span className="text-accent">Above 1</span> — fund rewarded
-                its risk well.
+                <span className="text-accent">Above 1</span> — rewarded its
+                risk well.
               </li>
               <li>
                 <span className="text-accent">Above 2</span> — exceptional
                 risk-adjusted performance.
               </li>
               <li>
-                <span className="text-muted">Around 0</span> — barely beat
-                the risk-free rate.
+                <span className="text-muted">Around 0</span> — barely beat the
+                risk-free rate.
               </li>
               <li>
-                <span className="text-danger">Negative</span> — you would
-                have done better in a fixed deposit.
+                <span className="text-danger">Negative</span> — you would have
+                done better in a fixed deposit.
               </li>
             </ul>
             <p>
-              Use it to{" "}
-              <span className="text-white">compare funds in the same category</span>
-              . A higher Sharpe means the fund delivered smoother returns for
-              the risk it took. It looks at the full window, so a strong
-              long-term Sharpe can co-exist with a weak recent year — always
-              cross-check with the chart.
+              If Sortino is much higher than Sharpe, the fund&apos;s volatility
+              is mostly to the upside — choppy in your favour.
             </p>
             <p className="text-muted/60">
               Based on past performance. Not predictive of future returns.
