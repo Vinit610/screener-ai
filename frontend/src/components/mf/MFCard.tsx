@@ -22,6 +22,7 @@ interface MFCardProps {
       sharpe_3y?: number | null;
       rank_3y?: number | null;
       peers_3y?: number | null;
+      nav_history_start?: string | null;
     } | null;
   };
 }
@@ -43,7 +44,22 @@ function returnColor(v: number | null | undefined): "default" | "green" | "red" 
   return v >= 0 ? "green" : "red";
 }
 
+function fmtMonthYear(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function MFCard({ fund }: MFCardProps) {
+  // A fund with no 3Y return is younger than 3 years — flag it so the "–" in
+  // the returns row reads as "too new" rather than "missing data".
+  const isNew =
+    fund.metrics != null &&
+    fund.metrics.return_3y == null &&
+    fund.metrics.nav_history_start != null;
+
   return (
     <div className="rounded-lg border border-border bg-surface p-4 transition hover:border-muted/50">
       {/* Header */}
@@ -55,7 +71,15 @@ export default function MFCard({ fund }: MFCardProps) {
           >
             {fund.scheme_name}
           </a>
-          <p className="mt-0.5 text-xs text-muted truncate">{fund.fund_house}</p>
+          <p className="mt-0.5 text-xs text-muted truncate">
+            {fund.fund_house}
+            {isNew && (
+              <span className="text-muted/70">
+                {" "}
+                · new — since {fmtMonthYear(fund.metrics?.nav_history_start)}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {fund.category && <Badge label={fund.category} variant="sector" />}

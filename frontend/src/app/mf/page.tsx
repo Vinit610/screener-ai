@@ -30,6 +30,7 @@ interface MFResult {
     sharpe_3y?: number | null;
     rank_3y?: number | null;
     peers_3y?: number | null;
+    nav_history_start?: string | null;
   } | null;
 }
 

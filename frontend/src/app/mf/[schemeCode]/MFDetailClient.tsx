@@ -57,7 +57,7 @@ interface MFDetailClientProps {
   data: MFDetailData;
 }
 
-type TimeRange = "1M" | "3M" | "6M" | "1Y" | "2Y" | "3Y" | "MAX";
+type TimeRange = "1M" | "3M" | "6M" | "1Y" | "2Y" | "3Y" | "5Y" | "MAX";
 
 const RANGE_DAYS: Record<TimeRange, number | null> = {
   "1M": 30,
@@ -66,6 +66,7 @@ const RANGE_DAYS: Record<TimeRange, number | null> = {
   "1Y": 365,
   "2Y": 730,
   "3Y": 1095,
+  "5Y": 1825,
   MAX: null,
 };
 
@@ -172,7 +173,15 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
       {/* Header */}
       <div>
         <h1 className="text-lg font-bold text-white">{data.scheme_name}</h1>
-        <p className="mt-1 text-xs text-muted">{data.fund_house}</p>
+        <p className="mt-1 text-xs text-muted">
+          {data.fund_house}
+          {m?.nav_history_start && (
+            <span className="text-muted/70">
+              {" "}
+              · track record since {fmtMonthYear(m.nav_history_start)}
+            </span>
+          )}
+        </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {data.category && <Badge label={data.category} variant="sector" />}
           {data.sub_category && (

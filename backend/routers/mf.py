@@ -2,7 +2,7 @@
 Mutual Fund screener and detail endpoints.
 
 GET /api/mf/screen          — filtered, paginated MF list + precomputed metrics
-GET /api/mf/{scheme_code}   — full detail + 5y NAV history + precomputed metrics
+GET /api/mf/{scheme_code}   — full detail + NAV history + precomputed metrics
 
 Per-fund metrics (trailing returns, category rank, Sharpe/Sortino, max
 drawdown) are precomputed nightly by pipeline/compute_mf_metrics.py into the
@@ -23,7 +23,7 @@ from schemas.stock_schemas import MFScreenerResponse, MFDetailResponse
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_NAV_WINDOW_DAYS = 365 * 5 + 10  # serve up to 5y of NAVs for the chart
+_NAV_WINDOW_DAYS = 365 * 11 + 10  # serve up to ~11y of NAVs for the chart
 _NAV_PAGE_SIZE = 1000  # Supabase REST caps responses at 1000 rows; paginate.
 
 
@@ -165,7 +165,7 @@ def get_mf(scheme_code: str):
         raise HTTPException(status_code=404, detail=f"Fund '{scheme_code}' not found")
     fund = fund_resp.data
 
-    # Serve up to 5y of NAVs so the chart MAX range has headroom.
+    # Serve up to ~11y of NAVs so the chart MAX range covers the full backfill.
     cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
     nav_history = _fetch_navs(fund["id"], cutoff)
 
