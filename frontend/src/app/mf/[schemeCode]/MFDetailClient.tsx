@@ -57,7 +57,7 @@ interface MFDetailClientProps {
   data: MFDetailData;
 }
 
-type TimeRange = "1M" | "3M" | "6M" | "1Y" | "2Y" | "3Y" | "MAX";
+type TimeRange = "1M" | "3M" | "6M" | "1Y" | "2Y" | "3Y" | "5Y" | "MAX";
 
 const RANGE_DAYS: Record<TimeRange, number | null> = {
   "1M": 30,
@@ -66,6 +66,7 @@ const RANGE_DAYS: Record<TimeRange, number | null> = {
   "1Y": 365,
   "2Y": 730,
   "3Y": 1095,
+  "5Y": 1825,
   MAX: null,
 };
 
