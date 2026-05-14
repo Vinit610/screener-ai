@@ -17,9 +17,8 @@ HISTORY_TOLERANCE_DAYS = 10    # grace for weekends / holidays / launch timing
 MIN_RETURNS_FOR_RATIO = 30     # min daily returns needed for sharpe / sortino
 TRADING_DAYS = 252
 
-FD_THRESHOLD_PCT = 6.5         # "beat a fixed deposit" bar — matches risk-free
-ROLLING_STEP_INDEX = 21        # ≈ monthly stepping through the NAV series
-MIN_ROLLING_WINDOWS = 12       # need a meaningful sample (≈1y of monthly windows)
+FD_THRESHOLD_PCT = 6.5            # "beat a fixed deposit" bar — matches risk-free
+ROLLING_MIN_SLIDE_DAYS = 365      # need window + ~1y of history for a real sample
 
 Nav = Tuple[str, float]  # (iso_date, nav), ascending by date
 
@@ -173,49 +172,44 @@ def max_drawdown(navs: List[Nav]) -> Dict:
 
 
 def rolling_returns(navs: List[Nav], window_years: int) -> Optional[Dict]:
-    """Distribution of annualised returns across every overlapping
-    `window_years`-long window in the fund's history, stepped ~monthly.
+    """Distribution of annualised returns across *every* overlapping
+    `window_years`-long window in the fund's history — one window per NAV date.
 
     A single trailing return can be lucky timing; this shows the spread of
-    outcomes an investor actually experienced. Each window's return is
-    annualised by its *actual* span so NAV gaps don't distort it.
+    outcomes an investor actually experienced. Stepping every date (rather than
+    sampling ~monthly) means min / max are the *true* worst / best windows, not
+    an approximation that can step over the actual extreme. Each window is
+    annualised by its actual span so NAV gaps don't distort it.
 
     Returns {avg, min, max, pct_above_fd, count} (all percent), or None when
-    the fund lacks enough history for a meaningful sample.
+    the fund doesn't have window_years + ~1y of history — not enough for a
+    meaningful sample.
     """
     if len(navs) < 2:
         return None
-    n = len(navs)
+    parsed = [date.fromisoformat(d) for d, _ in navs]
     window_days = window_years * 365
-    last_date = date.fromisoformat(navs[-1][0])
-    latest_start = last_date - timedelta(days=window_days)
+    if (parsed[-1] - parsed[0]).days < window_days + ROLLING_MIN_SLIDE_DAYS:
+        return None
 
+    n = len(navs)
     samples: List[float] = []
-    i = 0
-    while i < n:
-        start_date = date.fromisoformat(navs[i][0])
-        if start_date > latest_start:
+    j = 0  # end pointer — monotonic, never rewinds (targets only grow with i)
+    for i in range(n):
+        target = parsed[i] + timedelta(days=window_days)
+        if target > parsed[-1]:
+            break  # no complete window remains
+        while j < n and parsed[j] < target:
+            j += 1
+        if j >= n:
             break
-        # first NAV on or after the window-end target date
-        target_iso = (start_date + timedelta(days=window_days)).isoformat()
-        lo, hi = i, n
-        while lo < hi:
-            mid = (lo + hi) // 2
-            if navs[mid][0] < target_iso:
-                lo = mid + 1
-            else:
-                hi = mid
-        if lo >= n:
-            break
-        start_nav = navs[i][1]
-        end_nav = navs[lo][1]
-        actual_years = (date.fromisoformat(navs[lo][0]) - start_date).days / 365.0
+        start_nav, end_nav = navs[i][1], navs[j][1]
+        actual_years = (parsed[j] - parsed[i]).days / 365.0
         if start_nav > 0 and end_nav > 0 and actual_years > 0:
             annualised = ((end_nav / start_nav) ** (1 / actual_years) - 1) * 100
             samples.append(annualised)
-        i += ROLLING_STEP_INDEX
 
-    if len(samples) < MIN_ROLLING_WINDOWS:
+    if not samples:
         return None
     above = sum(1 for r in samples if r >= FD_THRESHOLD_PCT)
     return {

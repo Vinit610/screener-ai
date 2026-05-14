@@ -146,9 +146,29 @@ class TestRollingReturns:
         navs = self._steady(4, 0.0005)
         r = rolling_returns(navs, 1)
         assert r is not None
-        assert r['count'] >= 12
         assert r['min'] == pytest.approx(r['max'], abs=0.5)  # no spread
         assert r['avg'] > 0
+
+    def test_steps_every_date_not_a_monthly_sample(self):
+        # ~3y of daily data, 1y window → ~2y of start dates. Stepping every
+        # date yields hundreds of windows, not the ~24 a monthly sample would.
+        navs = self._steady(3, 0.0004)
+        r = rolling_returns(navs, 1)
+        assert r is not None
+        assert r['count'] > 600
+
+    def test_min_catches_a_localized_worst_window(self):
+        # Flat at 100 except a single 1-day crash to 50. Only windows that end
+        # exactly on the crash day are bad. A monthly sample would likely step
+        # over them; stepping every date must catch the ~-50% window.
+        start = date(2018, 1, 1)
+        navs = []
+        for i in range(900):
+            nav = 50.0 if i == 500 else 100.0
+            navs.append(((start + timedelta(days=i)).isoformat(), nav))
+        r = rolling_returns(navs, 1)
+        assert r is not None
+        assert r['min'] < -30  # the crash window is captured
 
     def test_pct_above_fd_full_when_returns_clear_bar(self):
         # ~20% annualised steady growth — every window beats the 6.5% FD bar.
