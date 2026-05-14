@@ -1,27 +1,29 @@
 """
 Mutual Fund screener and detail endpoints.
 
-GET /api/mf/screen          — filtered, paginated MF list
-GET /api/mf/{scheme_code}   — full detail + 365-day NAV history + rolling returns + Sharpe ratio
+GET /api/mf/screen          — filtered, paginated MF list + precomputed metrics
+GET /api/mf/{scheme_code}   — full detail + 5y NAV history + precomputed metrics
+
+Per-fund metrics (trailing returns, category rank, Sharpe/Sortino, max
+drawdown) are precomputed nightly by pipeline/compute_mf_metrics.py into the
+mf_metrics table — these endpoints just read them.
 """
 from __future__ import annotations
 
 import logging
-import math
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 from cache import get_cache, set_cache
 from database import supabase
-from schemas.stock_schemas import MFScreenerResponse, MFDetailResponse, RollingReturns
+from schemas.stock_schemas import MFScreenerResponse, MFDetailResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_RISK_FREE_DAILY = 0.065 / 252  # 6.5% annualised → daily
-_NAV_WINDOW_DAYS = 365 * 5 + 10  # fetch up to 5y so 3y returns have headroom
+_NAV_WINDOW_DAYS = 365 * 5 + 10  # serve up to 5y of NAVs for the chart
 _NAV_PAGE_SIZE = 1000  # Supabase REST caps responses at 1000 rows; paginate.
 
 
@@ -55,93 +57,17 @@ def _fetch_navs(fund_id: str, cutoff_iso: str) -> list[dict]:
     return all_rows
 
 
-def _get_fund_performance(fund_id: str) -> tuple[Optional[RollingReturns], Optional[float]]:
-    """
-    Fetch NAVs and compute trailing returns + sharpe ratio for a fund.
-    Returns (RollingReturns, sharpe_ratio) or (None, None) if N/A.
-    """
-    try:
-        cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
-        nav_rows = _fetch_navs(fund_id, cutoff)
-
-        if len(nav_rows) < 30:
-            return (None, None)
-
-        returns = RollingReturns(
-            return_1m=_trailing_return(nav_rows, 30),
-            return_3m=_trailing_return(nav_rows, 91),
-            return_6m=_trailing_return(nav_rows, 182),
-            return_1y=_trailing_return(nav_rows, 365),
-            return_2y=_trailing_return(nav_rows, 730),
-            return_3y=_trailing_return(nav_rows, 1095),
-        )
-        sharpe = _sharpe_ratio(nav_rows)
-        return (returns, sharpe)
-    except Exception as e:
-        logger.debug(f"Failed to compute performance for fund_id {fund_id}: {e}")
-        return (None, None)
-
-
-def _trailing_return(navs: list[dict], calendar_days: int) -> Optional[float]:
-    """
-    (latest_nav - nav_on_or_after(today - N days)) / nav_on_or_after(...) * 100.
-
-    Uses calendar-date lookup so the result is robust to holidays, weekends,
-    and uneven NAV coverage. Returns None when no NAV exists at or before the
-    target date (i.e. fund history is shorter than the requested window).
-
-    navs must be sorted ascending by date.
-    """
-    if not navs:
-        return None
-    target_iso = (date.today() - timedelta(days=calendar_days)).isoformat()
-    # Find the first NAV with date >= target_iso (binary search).
-    lo, hi = 0, len(navs)
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if navs[mid]["date"] < target_iso:
-            lo = mid + 1
-        else:
-            hi = mid
-    if lo >= len(navs):
-        return None
-    nav_past = navs[lo]["nav"]
-    nav_recent = navs[-1]["nav"]
-    if not nav_past or nav_past == 0:
-        return None
-    if navs[lo]["date"] == navs[-1]["date"]:
-        return None
-    return round((nav_recent - nav_past) / nav_past * 100, 2)
-
-
-def _sharpe_ratio(navs: list[dict]) -> Optional[float]:
-    """
-    Annualised Sharpe ratio from daily NAV returns.
-    Sharpe = (mean_daily_return - risk_free_daily) / std_daily_return * sqrt(252)
-    """
-    if len(navs) < 30:
-        return None
-
-    daily_returns = []
-    for i in range(1, len(navs)):
-        prev = navs[i - 1]["nav"]
-        curr = navs[i]["nav"]
-        if prev > 0:
-            daily_returns.append((curr - prev) / prev)
-
-    if len(daily_returns) < 2:
-        return None
-
-    n = len(daily_returns)
-    mean_r = sum(daily_returns) / n
-    variance = sum((r - mean_r) ** 2 for r in daily_returns) / (n - 1)
-    std_r = math.sqrt(variance)
-
-    if std_r == 0:
-        return None
-
-    sharpe = (mean_r - _RISK_FREE_DAILY) / std_r * math.sqrt(252)
-    return round(sharpe, 4)
+def _fetch_metrics_map(fund_ids: list[str]) -> dict[str, dict]:
+    """Precomputed mf_metrics rows keyed by fund_id, for a set of funds."""
+    if not fund_ids:
+        return {}
+    resp = (
+        supabase.table("mf_metrics")
+        .select("*")
+        .in_("fund_id", fund_ids)
+        .execute()
+    )
+    return {row["fund_id"]: row for row in (resp.data or [])}
 
 
 # ── GET /screen ───────────────────────────────────────────────────────────────
@@ -206,15 +132,12 @@ def screen_mf(
     data = resp.data or []
     total = resp.count or 0
 
-    # Enrich each fund with performance metrics
-    enriched_data = []
-    for fund in data:
-        returns, sharpe = _get_fund_performance(fund["id"])
-        enriched_data.append({
-            **fund,
-            "returns": returns.model_dump() if returns else None,
-            "sharpe_ratio": sharpe,
-        })
+    # Attach precomputed metrics in one batched lookup.
+    metrics_map = _fetch_metrics_map([f["id"] for f in data])
+    enriched_data = [
+        {**fund, "metrics": metrics_map.get(fund["id"])}
+        for fund in data
+    ]
 
     result = {"data": enriched_data, "total": total, "page": page, "limit": limit}
     set_cache(cache_key, result, ex=300)  # 5 minutes; NAVs only refresh daily
@@ -242,31 +165,17 @@ def get_mf(scheme_code: str):
         raise HTTPException(status_code=404, detail=f"Fund '{scheme_code}' not found")
     fund = fund_resp.data
 
-    # Fetch up to 5y of NAVs so the chart MAX range and 3Y return have headroom.
+    # Serve up to 5y of NAVs so the chart MAX range has headroom.
     cutoff = (date.today() - timedelta(days=_NAV_WINDOW_DAYS)).isoformat()
-    nav_rows = _fetch_navs(fund["id"], cutoff)
+    nav_history = _fetch_navs(fund["id"], cutoff)
 
-    # Compute trailing returns
-    returns = RollingReturns(
-        return_1m=_trailing_return(nav_rows, 30),
-        return_3m=_trailing_return(nav_rows, 91),
-        return_6m=_trailing_return(nav_rows, 182),
-        return_1y=_trailing_return(nav_rows, 365),
-        return_2y=_trailing_return(nav_rows, 730),
-        return_3y=_trailing_return(nav_rows, 1095),
-    )
-
-    # Sharpe ratio (uses full 3Y window)
-    sharpe = _sharpe_ratio(nav_rows)
-
-    # Return all available NAVs to frontend (need full 3Y for user timeframe selection)
-    nav_history = nav_rows
+    # Precomputed metrics (may be None until compute_mf_metrics.py has run).
+    metrics = _fetch_metrics_map([fund["id"]]).get(fund["id"])
 
     result = {
         **fund,
         "nav_history": nav_history,
-        "returns": returns.model_dump(),
-        "sharpe_ratio": sharpe,
+        "metrics": metrics,
     }
     set_cache(cache_key, result, ex=300)
     return result

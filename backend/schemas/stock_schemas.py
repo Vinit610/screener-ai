@@ -123,13 +123,25 @@ class NAVPoint(BaseModel):
     nav: float
 
 
-class RollingReturns(BaseModel):
-    return_1m: Optional[float] = None
-    return_3m: Optional[float] = None
-    return_6m: Optional[float] = None
+class MFMetrics(BaseModel):
+    """Precomputed per-fund metrics (mf_metrics table)."""
     return_1y: Optional[float] = None
-    return_2y: Optional[float] = None
     return_3y: Optional[float] = None
+    return_5y: Optional[float] = None
+    rank_1y: Optional[int] = None
+    peers_1y: Optional[int] = None
+    rank_3y: Optional[int] = None
+    peers_3y: Optional[int] = None
+    rank_5y: Optional[int] = None
+    peers_5y: Optional[int] = None
+    sharpe_3y: Optional[float] = None
+    sortino_3y: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    max_drawdown_peak_date: Optional[str] = None
+    max_drawdown_trough_date: Optional[str] = None
+    max_drawdown_recovery_date: Optional[str] = None
+    nav_history_start: Optional[str] = None
+    latest_nav_date: Optional[str] = None
 
 
 class MFDetailResponse(BaseModel):
@@ -145,8 +157,7 @@ class MFDetailResponse(BaseModel):
     is_direct: Optional[bool] = None
     is_growth: Optional[bool] = None
     nav_history: List[NAVPoint] = []
-    returns: RollingReturns = Field(default_factory=RollingReturns)
-    sharpe_ratio: Optional[float] = None
+    metrics: Optional[MFMetrics] = None
 
 
 # ── Compare Schemas ───────────────────────────────────────────────────────────

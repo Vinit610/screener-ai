@@ -115,6 +115,16 @@ def fetch_mf_navs() -> None:
     growth_plans = df[df['isin_growth'].str.len() > 0].copy()
     logger.info(f"Found {len(growth_plans)} growth plan NAVs")
 
+    # Narrow to Direct + Growth — the only plan variant the app surfaces.
+    # Storing Regular / IDCW variants is dead weight: the screener filters
+    # them out and the detail page looks up by scheme_code.
+    growth_plans = growth_plans[
+        growth_plans['scheme_name'].apply(
+            lambda n: is_direct_plan(n) and is_growth_plan(n)
+        )
+    ].copy()
+    logger.info(f"Narrowed to {len(growth_plans)} Direct+Growth plan NAVs")
+
     # Extract unique funds
     funds = growth_plans[['scheme_code', 'scheme_name', 'category', 'sub_category']].drop_duplicates(subset='scheme_code')
     fund_records = []

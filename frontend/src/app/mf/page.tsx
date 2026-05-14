@@ -23,15 +23,14 @@ interface MFResult {
   aum_cr?: number | null;
   is_direct?: boolean | null;
   is_growth?: boolean | null;
-  returns?: {
-    return_1m?: number | null;
-    return_3m?: number | null;
-    return_6m?: number | null;
+  metrics?: {
     return_1y?: number | null;
-    return_2y?: number | null;
     return_3y?: number | null;
+    return_5y?: number | null;
+    sharpe_3y?: number | null;
+    rank_3y?: number | null;
+    peers_3y?: number | null;
   } | null;
-  sharpe_ratio?: number | null;
 }
 
 const defaultFilters: MFFilters = {};

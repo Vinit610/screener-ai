@@ -7,7 +7,6 @@ Tests cover:
 """
 from __future__ import annotations
 
-import math
 import sys
 import os
 from unittest.mock import MagicMock, patch
@@ -23,76 +22,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Helper unit-tests (no FastAPI, no DB)
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestRollingReturn:
-    def _make_navs(self, n: int, start: float = 100.0, growth: float = 0.001):
-        """Generate n synthetic NAV rows growing by `growth` per day."""
-        navs = []
-        from datetime import date, timedelta
-        base = date(2022, 1, 1)
-        nav = start
-        for i in range(n):
-            navs.append({"date": (base + timedelta(days=i)).isoformat(), "nav": round(nav, 4)})
-            nav *= (1 + growth)
-        return navs
-
-    def test_returns_none_when_insufficient_data(self):
-        from routers.mf import _rolling_return
-        navs = self._make_navs(10)
-        assert _rolling_return(navs, 21) is None
-
-    def test_returns_positive_for_uptrending_series(self):
-        from routers.mf import _rolling_return
-        navs = self._make_navs(300)
-        ret = _rolling_return(navs, 21)
-        assert ret is not None
-        assert ret > 0
-
-    def test_returns_negative_for_downtrending_series(self):
-        from routers.mf import _rolling_return
-        navs = self._make_navs(300, growth=-0.001)
-        ret = _rolling_return(navs, 21)
-        assert ret is not None
-        assert ret < 0
-
-    def test_exact_value(self):
-        from routers.mf import _rolling_return
-        # Simple 2-element test: start=100, end=110 over 1 period
-        navs = [{"date": "2024-01-01", "nav": 100.0}, {"date": "2024-01-02", "nav": 110.0}]
-        result = _rolling_return(navs, 1)
-        assert result == pytest.approx(10.0, rel=1e-3)
-
-
-class TestSharpeRatio:
-    def _make_navs(self, n: int, growth: float = 0.001, noise: float = 0.0):
-        from datetime import date, timedelta
-        import random
-        random.seed(42)
-        navs = []
-        base = date(2022, 1, 1)
-        nav = 100.0
-        for i in range(n):
-            navs.append({"date": (base + timedelta(days=i)).isoformat(), "nav": round(nav, 4)})
-            nav *= (1 + growth + random.uniform(-noise, noise))
-        return navs
-
-    def test_returns_none_for_short_series(self):
-        from routers.mf import _sharpe_ratio
-        navs = self._make_navs(20)
-        assert _sharpe_ratio(navs) is None
-
-    def test_returns_float_for_long_series(self):
-        from routers.mf import _sharpe_ratio
-        navs = self._make_navs(500, noise=0.005)
-        result = _sharpe_ratio(navs)
-        assert result is not None
-        assert isinstance(result, float)
-
-    def test_high_growth_positive_sharpe(self):
-        from routers.mf import _sharpe_ratio
-        navs = self._make_navs(500, growth=0.002, noise=0.0005)
-        result = _sharpe_ratio(navs)
-        assert result is not None
-        assert result > 0
+# Per-fund return / Sharpe / Sortino / drawdown maths now lives in the pipeline
+# (pipeline/mf_metrics.py) and is unit-tested there — the backend just reads the
+# precomputed mf_metrics rows.
 
 
 class TestCacheKeyStability:
@@ -364,7 +296,7 @@ class TestMFDetailEndpoint:
         resp = tc.get("/api/mf/NONEXISTENT")
         assert resp.status_code == 404
 
-    def test_mf_detail_includes_returns_and_sharpe(self, client):
+    def test_mf_detail_includes_metrics_and_nav_history(self, client):
         tc, mock_db = client
 
         def _table_side_effect(name):
@@ -372,7 +304,7 @@ class TestMFDetailEndpoint:
                 chain = _mock_supabase_chain(_MF_ROW, count=1)
                 chain.execute.return_value.data = _MF_ROW
                 return chain
-            # mf_navs — return minimal NAV data
+            # mf_navs / mf_metrics — empty for this contract test
             return _mock_supabase_chain([], count=0)
 
         mock_db.table.side_effect = _table_side_effect
@@ -380,8 +312,7 @@ class TestMFDetailEndpoint:
         resp = tc.get("/api/mf/118989")
         assert resp.status_code == 200
         body = resp.json()
-        assert "returns" in body
-        assert "sharpe_ratio" in body
+        assert "metrics" in body
         assert "nav_history" in body
 
 
