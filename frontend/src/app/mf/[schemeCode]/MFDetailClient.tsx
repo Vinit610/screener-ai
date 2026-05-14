@@ -382,9 +382,9 @@ export default function MFDetailClient({ data }: MFDetailClientProps) {
             <div className="mt-2 space-y-2">
               <p>
                 A single trailing return depends on when you happened to start.
-                Rolling returns slide a window across the fund&apos;s whole
-                history (stepped ~monthly) and annualise each one — so you see
-                the <span className="text-white">range of outcomes</span>{" "}
+                Rolling returns slide the window across <em>every</em> day in
+                the fund&apos;s history and annualise each one — so you see the{" "}
+                <span className="text-white">range of outcomes</span>{" "}
                 investors actually experienced, not one lucky or unlucky date.
               </p>
               <p>
