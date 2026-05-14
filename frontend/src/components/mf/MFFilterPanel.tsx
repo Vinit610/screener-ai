@@ -7,7 +7,6 @@ interface MFFilterPanelProps {
     fund_house?: string;
     max_expense_ratio?: number;
     min_aum_cr?: number;
-    is_direct?: boolean;
   };
   onChange: (filters: MFFilterPanelProps["filters"]) => void;
   onReset: () => void;
@@ -89,31 +88,6 @@ export default function MFFilterPanel({
         <div className="flex justify-between text-[10px] text-muted">
           <span>₹0</span>
           <span>₹50K Cr</span>
-        </div>
-      </div>
-
-      {/* Direct / Regular toggle */}
-      <div>
-        <label className="mb-1 block text-xs text-muted">Plan Type</label>
-        <div className="flex gap-1">
-          {[
-            { label: "All", value: undefined },
-            { label: "Direct", value: true },
-            { label: "Regular", value: false },
-          ].map((opt) => (
-            <button
-              key={String(opt.value)}
-              type="button"
-              onClick={() => update({ is_direct: opt.value })}
-              className={`flex-1 rounded px-2 py-1.5 text-xs transition ${
-                filters.is_direct === opt.value
-                  ? "bg-primary text-white"
-                  : "bg-background text-muted hover:text-white"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
         </div>
       </div>
 
