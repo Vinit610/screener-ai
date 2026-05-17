@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response shapes used in the screener API.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Any, Dict, Literal
 from datetime import date
 
@@ -9,21 +9,64 @@ from datetime import date
 # ── Stock Fundamentals ────────────────────────────────────────────────────────
 
 class StockFundamentals(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     id: Optional[str] = None
     stock_id: Optional[str] = None
     pe: Optional[float] = None
     pb: Optional[float] = None
     roe: Optional[float] = None
     roce: Optional[float] = None
+    roa: Optional[float] = None
+    is_financial: Optional[bool] = None
     debt_to_equity: Optional[float] = None
     net_margin: Optional[float] = None
     operating_margin: Optional[float] = None
+    gross_margin: Optional[float] = None
+    ebitda_margin: Optional[float] = None
     revenue_cr: Optional[float] = None
     net_profit_cr: Optional[float] = None
+    ebitda_cr: Optional[float] = None
     eps: Optional[float] = None
+    forward_eps: Optional[float] = None
     dividend_yield: Optional[float] = None
     book_value: Optional[float] = None
     graham_number: Optional[float] = None
+    ev_to_ebitda: Optional[float] = None
+    peg: Optional[float] = None
+    price_to_sales: Optional[float] = None
+    forward_pe: Optional[float] = None
+    effective_tax_rate: Optional[float] = None
+    operating_cash_flow_cr: Optional[float] = None
+    fcf_cr: Optional[float] = None
+    fcf_yield: Optional[float] = None
+    cash_conversion: Optional[float] = None
+    interest_coverage: Optional[float] = None
+    current_ratio: Optional[float] = None
+    quick_ratio: Optional[float] = None
+    net_debt_cr: Optional[float] = None
+    net_debt_to_ebitda: Optional[float] = None
+    debtor_days: Optional[float] = None
+    inventory_days: Optional[float] = None
+    payable_days: Optional[float] = None
+    cash_conversion_cycle: Optional[float] = None
+    revenue_cagr_2y: Optional[float] = None
+    revenue_cagr_3y: Optional[float] = None
+    revenue_cagr_5y: Optional[float] = None
+    pat_cagr_2y: Optional[float] = None
+    pat_cagr_3y: Optional[float] = None
+    pat_cagr_5y: Optional[float] = None
+    ebitda_cagr_2y: Optional[float] = None
+    ebitda_cagr_3y: Optional[float] = None
+    ebitda_cagr_5y: Optional[float] = None
+    revenue_growth_yoy: Optional[float] = None
+    pat_growth_yoy: Optional[float] = None
+    earnings_growth_forward: Optional[float] = None
+    latest_period_end: Optional[str] = None
+    annual_periods_count: Optional[int] = None
+    quarterly_periods_count: Optional[int] = None
+    data_source: Optional[str] = None
+    fundamentals_updated_at: Optional[str] = None
     scraped_at: Optional[str] = None
 
 
