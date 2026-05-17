@@ -136,13 +136,6 @@ const QUOTE_SUMMARY_MODULES = [
   "price",
   "assetProfile",
   "summaryProfile",
-  // Statement history (4 years annual + 4 quarters; reliable field names)
-  "incomeStatementHistory",
-  "balanceSheetHistory",
-  "cashflowStatementHistory",
-  "incomeStatementHistoryQuarterly",
-  "balanceSheetHistoryQuarterly",
-  "cashflowStatementHistoryQuarterly",
   // Analyst & sentiment
   "earningsTrend",
   "earningsHistory",
@@ -156,6 +149,9 @@ const QUOTE_SUMMARY_MODULES = [
   "insiderTransactions",
   "insiderHolders",
   "netSharePurchaseActivity",
+  // NOTE: incomeStatementHistory, balanceSheetHistory, cashflowStatementHistory
+  // and their quarterly variants have returned almost no data since Nov 2024.
+  // All statement data now comes exclusively from fundamentalsTimeSeries.
 ];
 
 // fundamentalsTimeSeries goes 5+ years back, so 3Y CAGR computations work.
@@ -176,36 +172,21 @@ async function fetchFromExchange(yahooSymbol) {
 
     if (!quote) return null;
 
-    // Pull statement arrays from quoteSummary (primary source — more reliable
-    // field names and consistently 4 annual periods). Inner key names differ
-    // by statement type, so handle each explicitly.
-    const qsAnnual = {
-      incomeStatement: quote.incomeStatementHistory?.incomeStatementHistory ?? [],
-      balanceSheet:    quote.balanceSheetHistory?.balanceSheetStatements ?? [],
-      cashFlow:        quote.cashflowStatementHistory?.cashflowStatements ?? [],
-    };
-    const qsQuarterly = {
-      incomeStatement: quote.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? [],
-      balanceSheet:    quote.balanceSheetHistoryQuarterly?.balanceSheetStatements ?? [],
-      cashFlow:        quote.cashflowStatementHistoryQuarterly?.cashflowStatements ?? [],
-    };
-    // fundamentalsTimeSeries (supplementary — fills in missing line items)
-    const ftsAnnual = {
-      incomeStatement: annualIS?.timeSeries ?? annualIS ?? [],
-      balanceSheet:    annualBS?.timeSeries ?? annualBS ?? [],
-      cashFlow:        annualCF?.timeSeries ?? annualCF ?? [],
-    };
-    const ftsQuarterly = {
-      incomeStatement: qtrIS?.timeSeries ?? qtrIS ?? [],
-      balanceSheet:    qtrBS?.timeSeries ?? qtrBS ?? [],
-      cashFlow:        qtrCF?.timeSeries ?? qtrCF ?? [],
-    };
-
+    // fundamentalsTimeSeries is the sole statement source — quoteSummary's
+    // statement history modules have returned almost no data since Nov 2024.
     return {
       yahooSymbol,
       quote,
-      annual: { primary: qsAnnual, secondary: ftsAnnual },
-      quarterly: { primary: qsQuarterly, secondary: ftsQuarterly },
+      annual: {
+        incomeStatement: annualIS?.timeSeries ?? annualIS ?? [],
+        balanceSheet:    annualBS?.timeSeries ?? annualBS ?? [],
+        cashFlow:        annualCF?.timeSeries ?? annualCF ?? [],
+      },
+      quarterly: {
+        incomeStatement: qtrIS?.timeSeries ?? qtrIS ?? [],
+        balanceSheet:    qtrBS?.timeSeries ?? qtrBS ?? [],
+        cashFlow:        qtrCF?.timeSeries ?? qtrCF ?? [],
+      },
     };
   } catch (err) {
     return null;
@@ -248,16 +229,9 @@ function mergeExchangeData(primary, secondary) {
   };
 
   const mergeBucket = (p, s) => ({
-    primary: {
-      incomeStatement: mergeSeries(p.primary?.incomeStatement, s.primary?.incomeStatement),
-      balanceSheet:    mergeSeries(p.primary?.balanceSheet,    s.primary?.balanceSheet),
-      cashFlow:        mergeSeries(p.primary?.cashFlow,        s.primary?.cashFlow),
-    },
-    secondary: {
-      incomeStatement: mergeSeries(p.secondary?.incomeStatement, s.secondary?.incomeStatement),
-      balanceSheet:    mergeSeries(p.secondary?.balanceSheet,    s.secondary?.balanceSheet),
-      cashFlow:        mergeSeries(p.secondary?.cashFlow,        s.secondary?.cashFlow),
-    },
+    incomeStatement: mergeSeries(p.incomeStatement, s.incomeStatement),
+    balanceSheet:    mergeSeries(p.balanceSheet,    s.balanceSheet),
+    cashFlow:        mergeSeries(p.cashFlow,        s.cashFlow),
   });
 
   return {
@@ -307,37 +281,25 @@ function flattenStatementRow(row) {
 
 /**
  * Build merged statements: { periodEnd, income, balance, cashFlow } sorted desc.
- * Combines primary (quoteSummary) and secondary (fundamentalsTimeSeries) sources;
- * primary fields win, secondary fills gaps.
+ * All data comes from fundamentalsTimeSeries (the only reliable source).
  */
 function buildStatementsByPeriod(bucket) {
   const byDate = new Map();
 
-  const collect = (rows, key, primary) => {
+  const collect = (rows, key) => {
     for (const row of rows || []) {
       const dt = toDateStr(row?.asOfDate ?? row?.endDate ?? row?.date);
       if (!dt) continue;
       const entry = byDate.get(dt) || { periodEnd: dt, income: {}, balance: {}, cashFlow: {} };
       const flat = flattenStatementRow(row);
-      if (primary) {
-        // Primary fields overwrite (they're more authoritative)
-        entry[key] = { ...entry[key], ...flat };
-      } else {
-        // Secondary only fills missing fields
-        for (const [k, v] of Object.entries(flat)) {
-          if (entry[key][k] == null) entry[key][k] = v;
-        }
-      }
+      entry[key] = { ...entry[key], ...flat };
       byDate.set(dt, entry);
     }
   };
 
-  collect(bucket.primary?.incomeStatement, "income",   true);
-  collect(bucket.primary?.balanceSheet,    "balance",  true);
-  collect(bucket.primary?.cashFlow,        "cashFlow", true);
-  collect(bucket.secondary?.incomeStatement, "income",   false);
-  collect(bucket.secondary?.balanceSheet,    "balance",  false);
-  collect(bucket.secondary?.cashFlow,        "cashFlow", false);
+  collect(bucket.incomeStatement, "income");
+  collect(bucket.balanceSheet,    "balance");
+  collect(bucket.cashFlow,        "cashFlow");
 
   return [...byDate.values()].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
 }
