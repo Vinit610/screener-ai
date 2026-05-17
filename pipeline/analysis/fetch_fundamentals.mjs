@@ -162,12 +162,14 @@ async function fetchFromExchange(yahooSymbol) {
   try {
     const [quote, annualIS, annualBS, annualCF, qtrIS, qtrBS, qtrCF] = await Promise.all([
       yahooFinance.quoteSummary(yahooSymbol, { modules: QUOTE_SUMMARY_MODULES }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "incomeStatement", type: "annual" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "balanceSheet",   type: "annual" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "cashFlow",       type: "annual" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "incomeStatement", type: "quarterly" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "balanceSheet",   type: "quarterly" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "cashFlow",       type: "quarterly" }).catch(() => null),
+      // Valid module values per yahoo-finance2: 'financials' (income statement),
+      // 'balance-sheet', 'cash-flow', 'all'. Anything else throws a validation error.
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "financials",    type: "annual" }).catch((e) => { if (DEBUG) console.log(`      FTS annual financials err: ${e.message}`); return null; }),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "balance-sheet", type: "annual" }).catch((e) => { if (DEBUG) console.log(`      FTS annual balance err: ${e.message}`); return null; }),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "cash-flow",     type: "annual" }).catch((e) => { if (DEBUG) console.log(`      FTS annual cash err: ${e.message}`); return null; }),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "financials",    type: "quarterly" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "balance-sheet", type: "quarterly" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "cash-flow",     type: "quarterly" }).catch(() => null),
     ]);
 
     if (!quote) return null;
@@ -268,13 +270,33 @@ const STMT_SKIP_KEYS = new Set([
   "asOfDate", "endDate", "date", "periodType", "currencyCode", "maxAge",
 ]);
 
+/**
+ * fundamentalsTimeSeries rows have field names prefixed with `annual` or
+ * `quarterly` (e.g. `annualTotalRevenue`, `quarterlyTotalAssets`). Strip the
+ * prefix and lowercase the next character so callers can use the plain names
+ * (`totalRevenue`, `totalAssets`) consistently.
+ */
+function stripPeriodPrefix(key) {
+  if (key.startsWith("annual") && key.length > 6) {
+    return key[6].toLowerCase() + key.slice(7);
+  }
+  if (key.startsWith("quarterly") && key.length > 9) {
+    return key[9].toLowerCase() + key.slice(10);
+  }
+  if (key.startsWith("trailing") && key.length > 8) {
+    return key[8].toLowerCase() + key.slice(9);
+  }
+  return key;
+}
+
 function flattenStatementRow(row) {
   if (!row || typeof row !== "object") return {};
   const out = {};
   for (const [k, v] of Object.entries(row)) {
     if (STMT_SKIP_KEYS.has(k)) continue;
     const raw = unwrap(v);
-    if (raw != null && Number.isFinite(Number(raw))) out[k] = Number(raw);
+    if (raw == null || !Number.isFinite(Number(raw))) continue;
+    out[stripPeriodPrefix(k)] = Number(raw);
   }
   return out;
 }
