@@ -533,12 +533,24 @@ function cagr(start, end, years) {
   return round((Math.pow(end / start, 1 / years) - 1) * 100, 2);
 }
 
-/** Compute revenue/PAT/EBITDA CAGR from annual statements (descending by date).
- *  For banks: totalRevenue is typically null. Falls back to totalInterestIncome
- *  or netInterestIncome (banks' nearest equivalent to "revenue").
+/**
+ * Compute revenue / PAT / EBITDA CAGR over multiple horizons (2Y, 3Y, 5Y) and
+ * YoY growth from annual statements (descending by date).
+ *
+ * Each horizon is populated ONLY when we have an annual statement whose date is
+ * close to N years before the latest one (±6 months tolerance). This avoids
+ * the previous bug where a 2-year CAGR was being stored in a `_3y` column.
+ *
+ * For banks: totalRevenue is typically null — falls back to interest income.
  */
 function computeGrowthMetrics(annualStmts) {
-  if (!annualStmts.length) return { revenueCagr3y: null, patCagr3y: null, ebitdaCagr3y: null, revenueYoY: null, patYoY: null };
+  const empty = {
+    revenueCagr2y: null, revenueCagr3y: null, revenueCagr5y: null,
+    patCagr2y: null,     patCagr3y: null,     patCagr5y: null,
+    ebitdaCagr2y: null,  ebitdaCagr3y: null,  ebitdaCagr5y: null,
+    revenueYoY: null,    patYoY: null,
+  };
+  if (!annualStmts.length) return empty;
 
   const getRevenue = (s) => firstNonNull(
     s.income.totalRevenue,
@@ -549,32 +561,44 @@ function computeGrowthMetrics(annualStmts) {
   const getPAT     = (s) => firstNonNull(s.income.netIncome, s.income.netIncomeCommonStockholders);
   const getEBITDA  = (s) => computeEBITDA(s.income, s.cashFlow);
 
-  const latest    = annualStmts[0];
-  const prior     = annualStmts[1] ?? null;
-  const threeBack = annualStmts[3] ?? annualStmts[annualStmts.length - 1] ?? null;
+  const latest = annualStmts[0];
+  const yearsBetween = (a, b) =>
+    (new Date(a.periodEnd) - new Date(b.periodEnd)) / (1000 * 60 * 60 * 24 * 365.25);
 
-  const periodsBetween = (a, b) => {
-    if (!a || !b) return null;
-    const yrs = (new Date(a.periodEnd) - new Date(b.periodEnd)) / (1000 * 60 * 60 * 24 * 365.25);
-    return Math.round(yrs);
+  // Find the annual statement closest to N years before `latest`, within ±0.6 yr.
+  const findHorizon = (targetYears) => {
+    let best = null, bestDiff = Infinity;
+    for (let i = 1; i < annualStmts.length; i++) {
+      const yrs = yearsBetween(latest, annualStmts[i]);
+      const diff = Math.abs(yrs - targetYears);
+      if (diff < bestDiff && diff <= 0.6) {
+        bestDiff = diff;
+        best = { stmt: annualStmts[i], actualYears: yrs };
+      }
+    }
+    return best;
   };
 
-  const yearsBack = periodsBetween(latest, threeBack);
-  const useFor3yCagr = yearsBack && yearsBack >= 2 ? yearsBack : null;
+  const result = { ...empty };
 
-  return {
-    revenueCagr3y: useFor3yCagr ? cagr(getRevenue(threeBack), getRevenue(latest), useFor3yCagr) : null,
-    patCagr3y:     useFor3yCagr ? cagr(getPAT(threeBack),     getPAT(latest),     useFor3yCagr) : null,
-    ebitdaCagr3y:  useFor3yCagr ? cagr(getEBITDA(threeBack),  getEBITDA(latest),  useFor3yCagr) : null,
-    revenueYoY: prior ? (() => {
-      const a = getRevenue(prior), b = getRevenue(latest);
-      return a && b ? round(((b - a) / a) * 100, 2) : null;
-    })() : null,
-    patYoY: prior ? (() => {
-      const a = getPAT(prior), b = getPAT(latest);
-      return a && b ? round(((b - a) / a) * 100, 2) : null;
-    })() : null,
-  };
+  for (const target of [2, 3, 5]) {
+    const h = findHorizon(target);
+    if (!h) continue;
+    result[`revenueCagr${target}y`] = cagr(getRevenue(h.stmt), getRevenue(latest), h.actualYears);
+    result[`patCagr${target}y`]     = cagr(getPAT(h.stmt),     getPAT(latest),     h.actualYears);
+    result[`ebitdaCagr${target}y`]  = cagr(getEBITDA(h.stmt),  getEBITDA(latest),  h.actualYears);
+  }
+
+  // YoY growth (single-period % change)
+  const prior = annualStmts[1] ?? null;
+  if (prior) {
+    const revA = getRevenue(prior), revB = getRevenue(latest);
+    const patA = getPAT(prior),     patB = getPAT(latest);
+    if (revA && revB) result.revenueYoY = round(((revB - revA) / revA) * 100, 2);
+    if (patA && patB) result.patYoY     = round(((patB - patA) / patA) * 100, 2);
+  }
+
+  return result;
 }
 
 // ── Build the fundamentals row ──────────────────────────────────────────────
@@ -711,15 +735,30 @@ function buildFundamentalsRecord(stockId, merged) {
     payable_days: wcDays.payableDays,
     cash_conversion_cycle: wcDays.ccc,
 
+    // CAGR columns: each populated ONLY when that horizon's data is actually
+    // available. If only 2 years of annual history exist, _3y / _5y stay null
+    // and _2y carries the real number — never silently fudged.
+    revenue_cagr_2y: growth.revenueCagr2y,
     revenue_cagr_3y: growth.revenueCagr3y,
-    pat_cagr_3y: growth.patCagr3y,
-    ebitda_cagr_3y: growth.ebitdaCagr3y,
+    revenue_cagr_5y: growth.revenueCagr5y,
+    pat_cagr_2y:     growth.patCagr2y,
+    pat_cagr_3y:     growth.patCagr3y,
+    pat_cagr_5y:     growth.patCagr5y,
+    ebitda_cagr_2y:  growth.ebitdaCagr2y,
+    ebitda_cagr_3y:  growth.ebitdaCagr3y,
+    ebitda_cagr_5y:  growth.ebitdaCagr5y,
     revenue_growth_yoy: growth.revenueYoY,
-    pat_growth_yoy: growth.patYoY,
+    pat_growth_yoy:     growth.patYoY,
 
     forward_pe: round(forwardPE),
     forward_eps: round(fwdEps),
     earnings_growth_forward: fwdEarningsGrowth != null ? round(fwdEarningsGrowth * 100, 2) : null,
+
+    // Period coverage metadata — UI uses these to label exactly which fiscal
+    // year and how many periods each computed metric is based on.
+    latest_period_end:       annualStmts[0]?.periodEnd ?? null,
+    annual_periods_count:    annualStmts.length,
+    quarterly_periods_count: buildStatementsByPeriod(merged.quarterly).length,
 
     data_source: merged.source,
     fundamentals_updated_at: new Date().toISOString(),
@@ -879,14 +918,25 @@ async function processStock(stock, dryRun) {
   const retLabel = fundamentalsRecord.is_financial
     ? `roa=${fundamentalsRecord.roa ?? "—"}% (fin)`
     : `roce=${fundamentalsRecord.roce ?? "—"}%`;
+
+  // Pick the longest CAGR horizon that's actually populated.
+  const bestCagr = (prefix) => {
+    for (const yrs of [5, 3, 2]) {
+      const v = fundamentalsRecord[`${prefix}_cagr_${yrs}y`];
+      if (v != null) return `${v}% (${yrs}y)`;
+    }
+    return "—";
+  };
+
   console.log(
     `  [${symbol}] source=${merged.source} | ` +
-    `populated=${populated} | ` +
+    `populated=${populated} | periods=${fundamentalsRecord.annual_periods_count}A/${fundamentalsRecord.quarterly_periods_count}Q | ` +
+    `latest=${fundamentalsRecord.latest_period_end ?? "—"} | ` +
     `${retLabel} | ` +
     `peg=${fundamentalsRecord.peg ?? "—"} | ` +
     `fcf=${fundamentalsRecord.fcf_cr ?? "—"}Cr | ` +
-    `rev_cagr=${fundamentalsRecord.revenue_cagr_3y ?? "—"}% | ` +
-    `pat_cagr=${fundamentalsRecord.pat_cagr_3y ?? "—"}%`
+    `rev_cagr=${bestCagr("revenue")} | ` +
+    `pat_cagr=${bestCagr("pat")}`
   );
 
   if (dryRun) return { ok: true, dryRun: true };
