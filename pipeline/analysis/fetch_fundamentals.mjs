@@ -665,10 +665,6 @@ function buildFundamentalsRecord(stockId, merged) {
   const fwdEps    = unwrap(ks.forwardEps);
   const bookValue = unwrap(ks.bookValue);
 
-  // Graham Number = sqrt(22.5 × EPS × Book Value)
-  const grahamNumber = (eps && bookValue && eps > 0 && bookValue > 0)
-    ? round(Math.sqrt(22.5 * eps * bookValue), 2)
-    : null;
 
   // Forward earnings growth from analyst estimates
   const fwdEarningsGrowth = unwrap(et.trend?.find((t) => t.period === "+1y")?.growth);
@@ -691,7 +687,7 @@ function buildFundamentalsRecord(stockId, merged) {
     eps: round(eps),
     dividend_yield: toPct(unwrap(sd.dividendYield)),
     book_value: round(bookValue),
-    graham_number: grahamNumber,
+    // graham_number is a GENERATED column (sqrt(22.5 * eps * book_value)) — Postgres computes it
 
     // Extended columns (migration 007)
     ev_to_ebitda: round(evEbitda),
