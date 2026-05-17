@@ -66,15 +66,20 @@ const MAX_QUARTERLY_PERIODS = 8;
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const parsed = { symbol: null, symbols: null, limit: null, dryRun: false };
+  const parsed = { symbol: null, symbols: null, limit: null, dryRun: false, debug: false };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--symbol" && args[i + 1]) parsed.symbol = args[++i].toUpperCase();
     else if (args[i] === "--symbols" && args[i + 1]) parsed.symbols = args[++i].toUpperCase().split(",");
     else if (args[i] === "--limit" && args[i + 1]) parsed.limit = parseInt(args[++i], 10);
     else if (args[i] === "--dry-run") parsed.dryRun = true;
+    else if (args[i] === "--debug") parsed.debug = true;
   }
   return parsed;
 }
+
+// Shared args reference so helpers can emit debug output without threading it
+// through every call signature.
+let DEBUG = false;
 
 // ── Utilities ───────────────────────────────────────────────────────────────
 
@@ -339,11 +344,86 @@ function buildStatementsByPeriod(bucket) {
 
 // ── Derived metric computations ─────────────────────────────────────────────
 
+/**
+ * Derive EBIT from income statement fields, trying multiple approaches.
+ *
+ * Yahoo's field names differ by company type and region. Priority:
+ *   1. Direct ebit field
+ *   2. operatingIncome (standard for most companies)
+ *   3. Pretax income + interest expense (add back financing costs)
+ *   4. Revenue − totalOperatingExpenses (sometimes Yahoo provides opex as a subtotal)
+ *
+ * Returns raw INR value (not percentage).
+ */
+function deriveEBIT(income) {
+  // Direct
+  const direct = firstNonNull(income.ebit, income.operatingIncome);
+  if (direct != null) {
+    if (DEBUG) console.log(`      EBIT: direct field → ${direct}`);
+    return direct;
+  }
+
+  // Pretax + interest expense. Yahoo reports interest as negative for some companies.
+  const ptbi     = firstNonNull(income.pretaxIncome, income.incomeBeforeTax);
+  const interest = firstNonNull(income.interestExpense);
+  if (ptbi != null && interest != null) {
+    const ebit = ptbi + Math.abs(interest); // add back interest cost
+    if (DEBUG) console.log(`      EBIT: pretaxIncome(${ptbi}) + |interest|(${Math.abs(interest)}) = ${ebit}`);
+    return ebit;
+  }
+  if (ptbi != null) {
+    // No interest data — pretax is a rough EBIT proxy (understates for leveraged cos.)
+    if (DEBUG) console.log(`      EBIT: pretaxIncome fallback (no interest data) → ${ptbi}`);
+    return ptbi;
+  }
+
+  // Revenue minus operating expenses subtotal
+  const rev  = firstNonNull(income.totalRevenue, income.operatingRevenue);
+  const opex = firstNonNull(income.totalOperatingExpenses);
+  if (rev != null && opex != null) {
+    const ebit = rev - opex;
+    if (DEBUG) console.log(`      EBIT: revenue(${rev}) - opex(${opex}) = ${ebit}`);
+    return ebit;
+  }
+
+  if (DEBUG) console.log(`      EBIT: all methods failed. income keys: ${Object.keys(income).join(", ")}`);
+  return null;
+}
+
+/**
+ * Derive current liabilities from balance sheet, trying multiple field names.
+ * Yahoo uses inconsistent naming across company types and regions.
+ */
+function deriveCurrentLiabilities(balance) {
+  // Direct names
+  const direct = firstNonNull(balance.currentLiabilities, balance.totalCurrentLiabilities);
+  if (direct != null) return direct;
+
+  // Sum components when subtotal is absent
+  const ap           = firstNonNull(balance.accountsPayable, balance.payables);
+  const shortDebt    = firstNonNull(balance.shortTermDebt, balance.shortLongTermDebt, balance.currentPortionOfLongTermDebt);
+  const otherCurrent = firstNonNull(balance.otherCurrentLiabilities, balance.currentOtherLiabilities);
+  const accrued      = firstNonNull(balance.accruedLiabilities, balance.accruedExpenses);
+  const taxPayable   = firstNonNull(balance.taxPayable, balance.incomeTaxPayable);
+
+  const components = [ap, shortDebt, otherCurrent, accrued, taxPayable].filter((v) => v != null);
+  if (components.length > 0) {
+    const sum = components.reduce((a, b) => a + b, 0);
+    if (DEBUG) console.log(`      CurrentLiab: summed ${components.length} components = ${sum}`);
+    return sum;
+  }
+
+  if (DEBUG) console.log(`      CurrentLiab: all methods failed. balance keys: ${Object.keys(balance).join(", ")}`);
+  return null;
+}
+
 /** True ROCE = EBIT / (Total Assets − Current Liabilities). Returns %. */
 function computeROCE(income, balance) {
-  const ebit = firstNonNull(income.ebit, income.operatingIncome);
+  const ebit       = deriveEBIT(income);
   const totalAssets = firstNonNull(balance.totalAssets);
-  const currentLiab = firstNonNull(balance.currentLiabilities, balance.totalCurrentLiabilities);
+  const currentLiab = deriveCurrentLiabilities(balance);
+
+  if (DEBUG) console.log(`      ROCE inputs: ebit=${ebit} totalAssets=${totalAssets} currentLiab=${currentLiab}`);
   if (ebit == null || totalAssets == null || currentLiab == null) return null;
   const capitalEmployed = totalAssets - currentLiab;
   if (capitalEmployed <= 0) return null;
@@ -357,7 +437,6 @@ function computeROA(income, balance, fdFallback) {
   if (ni != null && totalAssets != null && totalAssets > 0) {
     return round((ni / totalAssets) * 100, 2);
   }
-  // Fall back to Yahoo's pre-computed value
   return toPct(fdFallback);
 }
 
@@ -379,11 +458,12 @@ function isFinancialCompany(quote) {
 
 /** EBITDA = EBIT + D&A. */
 function computeEBITDA(income, cashFlow) {
-  const ebit = firstNonNull(income.ebit, income.operatingIncome);
+  const ebit = deriveEBIT(income);
   const da = firstNonNull(
     income.reconciledDepreciation,
     cashFlow.depreciationAndAmortization,
     cashFlow.depreciation,
+    cashFlow.depreciationDepletion,
   );
   if (ebit == null) return null;
   if (da == null) return ebit; // fallback to EBIT if D&A unavailable
@@ -400,8 +480,8 @@ function computeCashConversion(cashFlow, income) {
 
 /** Interest coverage = EBIT / Interest Expense. */
 function computeInterestCoverage(income) {
-  const ebit = firstNonNull(income.ebit, income.operatingIncome);
-  const interest = firstNonNull(income.interestExpense, income.netInterestIncome);
+  const ebit = deriveEBIT(income);
+  const interest = firstNonNull(income.interestExpense, income.netInterestExpense);
   if (ebit == null || interest == null || interest === 0) return null;
   // Yahoo sometimes returns interest expense as negative; use absolute value
   return round(ebit / Math.abs(interest), 2);
@@ -427,11 +507,11 @@ function computeFCF(cashFlow) {
 
 /** Working capital days: receivables ÷ revenue × 365 etc. */
 function computeWorkingCapitalDays(income, balance) {
-  const revenue = firstNonNull(income.totalRevenue, income.operatingRevenue);
-  const cogs = firstNonNull(income.costOfRevenue, income.reconciledCostOfRevenue);
-  const receivables = firstNonNull(balance.accountsReceivable, balance.netReceivables);
-  const inventory = firstNonNull(balance.inventory);
-  const payables = firstNonNull(balance.accountsPayable, balance.payables);
+  const revenue = firstNonNull(income.totalRevenue, income.operatingRevenue, income.totalInterestIncome);
+  const cogs = firstNonNull(income.costOfRevenue, income.reconciledCostOfRevenue, income.costOfGoodsAndServicesSold);
+  const receivables = firstNonNull(balance.accountsReceivable, balance.netReceivables, balance.otherReceivables);
+  const inventory = firstNonNull(balance.inventory, balance.inventoryNet);
+  const payables = firstNonNull(balance.accountsPayable, balance.payables, balance.tradePayables);
 
   const debtorDays    = revenue && receivables != null ? round((receivables / revenue) * 365, 1) : null;
   const inventoryDays = (cogs || revenue) && inventory != null
@@ -838,8 +918,10 @@ async function processStock(stock, dryRun) {
 
 async function main() {
   const args = parseArgs();
+  DEBUG = args.debug;
   console.log("=== fetch_fundamentals.mjs ===");
   if (args.dryRun) console.log("(DRY RUN — no DB writes)");
+  if (DEBUG) console.log("(DEBUG mode — verbose statement field logging)");
 
   // Determine which stocks to process
   let stocks;
