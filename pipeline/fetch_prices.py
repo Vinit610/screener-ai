@@ -97,13 +97,12 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
             session = requests.Session(impersonate="chrome")
             ticker = yf.Ticker(symbol, session=session)
             info = ticker.info
-            # Convert market cap from USD to INR crores (approximate)
+            # Yahoo Finance returns market cap in INR for .NS / .BO tickers,
+            # not USD. The earlier *83 conversion inflated every market cap by 83x.
             market_cap_raw = info.get('marketCap', None)
             market_cap_cr = None
             if market_cap_raw:
-                # Rough conversion: 1 INR = 0.012 USD, so multiply by ~83 to get INR
-                market_cap_inr = market_cap_raw * 83
-                market_cap_cr = market_cap_inr / 10_000_000  # Convert to crores
+                market_cap_cr = market_cap_raw / 10_000_000  # INR → crores
 
             def safe_num(val):
                 """Safely convert to float, return None for missing/NaN."""
@@ -129,7 +128,9 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
             pe = safe_num(info.get('trailingPE'))
             pb = safe_num(info.get('priceToBook'))
             roe = to_pct(info.get('returnOnEquity'))
-            roce = to_pct(info.get('returnOnAssets'))  # closest proxy available
+            # NOTE: True ROCE = EBIT / (Total Assets - Current Liabilities) is computed
+            # in pipeline/analysis/fetch_fundamentals.mjs from full balance sheet data.
+            # Don't write a ROA-based proxy here — it would overwrite the correct value.
             debt_to_equity = safe_num(info.get('debtToEquity'))
             dividend_yield = to_pct(info.get('dividendYield'))
             eps = safe_num(info.get('trailingEps'))
@@ -154,7 +155,6 @@ def get_stock_info(symbol: str, delay: float = DELAY_BETWEEN_STOCKS) -> Dict:
                 'pe': pe,
                 'pb': pb,
                 'roe': roe,
-                'roce': roce,
                 'debt_to_equity': debt_to_equity,
                 'dividend_yield': dividend_yield,
                 'eps': eps,

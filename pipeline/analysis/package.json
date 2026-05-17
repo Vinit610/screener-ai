@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "node generate_analyses.mjs"
+    "generate": "node generate_analyses.mjs",
+    "fetch-fundamentals": "node fetch_fundamentals.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
