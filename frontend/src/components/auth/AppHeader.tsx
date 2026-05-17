@@ -28,13 +28,13 @@ export default function AppHeader() {
           >
             Screener
           </a> */}
-          {/* <a
+          <a
             href="/mf"
             className="text-xs text-muted transition hover:text-white"
           >
             Mutual Funds
           </a>
-          <a
+          {/* <a
             href="/compare"
             className="text-xs text-muted transition hover:text-white"
           >
