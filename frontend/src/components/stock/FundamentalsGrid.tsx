@@ -2,6 +2,7 @@
 
 import { clsx } from "clsx";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ function MetricCell({ label, value, tooltip, subtitle, color = "default" }: Metr
 
 // ── Section wrapper ────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: JSX.Element | (JSX.Element | false | null | undefined)[] }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
       <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</h3>
