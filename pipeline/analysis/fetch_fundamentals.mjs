@@ -124,17 +124,27 @@ function toDateStr(d) {
 // ── Yahoo Finance fetch ─────────────────────────────────────────────────────
 
 const QUOTE_SUMMARY_MODULES = [
+  // Profile & price
   "summaryDetail",
   "defaultKeyStatistics",
   "financialData",
   "price",
   "assetProfile",
   "summaryProfile",
+  // Statement history (4 years annual + 4 quarters; reliable field names)
+  "incomeStatementHistory",
+  "balanceSheetHistory",
+  "cashflowStatementHistory",
+  "incomeStatementHistoryQuarterly",
+  "balanceSheetHistoryQuarterly",
+  "cashflowStatementHistoryQuarterly",
+  // Analyst & sentiment
   "earningsTrend",
   "earningsHistory",
   "recommendationTrend",
   "upgradeDowngradeHistory",
   "calendarEvents",
+  // Ownership & insider activity
   "majorHoldersBreakdown",
   "institutionOwnership",
   "fundOwnership",
@@ -143,35 +153,54 @@ const QUOTE_SUMMARY_MODULES = [
   "netSharePurchaseActivity",
 ];
 
+// fundamentalsTimeSeries goes 5+ years back, so 3Y CAGR computations work.
+const FTS_PERIOD1 = new Date(Date.now() - 5.5 * 365 * 24 * 60 * 60 * 1000)
+  .toISOString().slice(0, 10);
+
 async function fetchFromExchange(yahooSymbol) {
   try {
-    const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
-    const period1 = oneYearAgo.toISOString().slice(0, 10);
-
     const [quote, annualIS, annualBS, annualCF, qtrIS, qtrBS, qtrCF] = await Promise.all([
       yahooFinance.quoteSummary(yahooSymbol, { modules: QUOTE_SUMMARY_MODULES }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module: "incomeStatement", type: "annual" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module: "balanceSheet",   type: "annual" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module: "cashFlow",       type: "annual" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module: "incomeStatement", type: "quarterly" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module: "balanceSheet",   type: "quarterly" }).catch(() => null),
-      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1, module: "cashFlow",       type: "quarterly" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "incomeStatement", type: "annual" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "balanceSheet",   type: "annual" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "cashFlow",       type: "annual" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "incomeStatement", type: "quarterly" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "balanceSheet",   type: "quarterly" }).catch(() => null),
+      yahooFinance.fundamentalsTimeSeries(yahooSymbol, { period1: FTS_PERIOD1, module: "cashFlow",       type: "quarterly" }).catch(() => null),
     ]);
 
     if (!quote) return null;
+
+    // Pull statement arrays from quoteSummary (primary source — more reliable
+    // field names and consistently 4 annual periods). Inner key names differ
+    // by statement type, so handle each explicitly.
+    const qsAnnual = {
+      incomeStatement: quote.incomeStatementHistory?.incomeStatementHistory ?? [],
+      balanceSheet:    quote.balanceSheetHistory?.balanceSheetStatements ?? [],
+      cashFlow:        quote.cashflowStatementHistory?.cashflowStatements ?? [],
+    };
+    const qsQuarterly = {
+      incomeStatement: quote.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? [],
+      balanceSheet:    quote.balanceSheetHistoryQuarterly?.balanceSheetStatements ?? [],
+      cashFlow:        quote.cashflowStatementHistoryQuarterly?.cashflowStatements ?? [],
+    };
+    // fundamentalsTimeSeries (supplementary — fills in missing line items)
+    const ftsAnnual = {
+      incomeStatement: annualIS?.timeSeries ?? annualIS ?? [],
+      balanceSheet:    annualBS?.timeSeries ?? annualBS ?? [],
+      cashFlow:        annualCF?.timeSeries ?? annualCF ?? [],
+    };
+    const ftsQuarterly = {
+      incomeStatement: qtrIS?.timeSeries ?? qtrIS ?? [],
+      balanceSheet:    qtrBS?.timeSeries ?? qtrBS ?? [],
+      cashFlow:        qtrCF?.timeSeries ?? qtrCF ?? [],
+    };
+
     return {
       yahooSymbol,
       quote,
-      annual: {
-        incomeStatement: annualIS?.timeSeries ?? annualIS ?? [],
-        balanceSheet:    annualBS?.timeSeries ?? annualBS ?? [],
-        cashFlow:        annualCF?.timeSeries ?? annualCF ?? [],
-      },
-      quarterly: {
-        incomeStatement: qtrIS?.timeSeries ?? qtrIS ?? [],
-        balanceSheet:    qtrBS?.timeSeries ?? qtrBS ?? [],
-        cashFlow:        qtrCF?.timeSeries ?? qtrCF ?? [],
-      },
+      annual: { primary: qsAnnual, secondary: ftsAnnual },
+      quarterly: { primary: qsQuarterly, secondary: ftsQuarterly },
     };
   } catch (err) {
     return null;
@@ -213,19 +242,24 @@ function mergeExchangeData(primary, secondary) {
     return out;
   };
 
+  const mergeBucket = (p, s) => ({
+    primary: {
+      incomeStatement: mergeSeries(p.primary?.incomeStatement, s.primary?.incomeStatement),
+      balanceSheet:    mergeSeries(p.primary?.balanceSheet,    s.primary?.balanceSheet),
+      cashFlow:        mergeSeries(p.primary?.cashFlow,        s.primary?.cashFlow),
+    },
+    secondary: {
+      incomeStatement: mergeSeries(p.secondary?.incomeStatement, s.secondary?.incomeStatement),
+      balanceSheet:    mergeSeries(p.secondary?.balanceSheet,    s.secondary?.balanceSheet),
+      cashFlow:        mergeSeries(p.secondary?.cashFlow,        s.secondary?.cashFlow),
+    },
+  });
+
   return {
     source: "NSE+BSE",
     quote: mergedQuote,
-    annual: {
-      incomeStatement: mergeSeries(primary.annual.incomeStatement, secondary.annual.incomeStatement),
-      balanceSheet:    mergeSeries(primary.annual.balanceSheet,    secondary.annual.balanceSheet),
-      cashFlow:        mergeSeries(primary.annual.cashFlow,        secondary.annual.cashFlow),
-    },
-    quarterly: {
-      incomeStatement: mergeSeries(primary.quarterly.incomeStatement, secondary.quarterly.incomeStatement),
-      balanceSheet:    mergeSeries(primary.quarterly.balanceSheet,    secondary.quarterly.balanceSheet),
-      cashFlow:        mergeSeries(primary.quarterly.cashFlow,        secondary.quarterly.cashFlow),
-    },
+    annual: mergeBucket(primary.annual, secondary.annual),
+    quarterly: mergeBucket(primary.quarterly, secondary.quarterly),
   };
 }
 
@@ -251,32 +285,55 @@ async function fetchYahooData(symbol) {
  * Yahoo's shape is { asOfDate, totalRevenue: { raw, fmt }, ... }.
  * Returns plain numeric values.
  */
+const STMT_SKIP_KEYS = new Set([
+  "asOfDate", "endDate", "date", "periodType", "currencyCode", "maxAge",
+]);
+
 function flattenStatementRow(row) {
   if (!row || typeof row !== "object") return {};
   const out = {};
   for (const [k, v] of Object.entries(row)) {
-    if (k === "asOfDate" || k === "endDate" || k === "date" || k === "periodType" || k === "currencyCode") continue;
+    if (STMT_SKIP_KEYS.has(k)) continue;
     const raw = unwrap(v);
     if (raw != null && Number.isFinite(Number(raw))) out[k] = Number(raw);
   }
   return out;
 }
 
-/** Build merged statements: { periodEnd, income, balance, cashFlow } sorted desc. */
-function buildStatementsByPeriod(annualOrQuarterly) {
+/**
+ * Build merged statements: { periodEnd, income, balance, cashFlow } sorted desc.
+ * Combines primary (quoteSummary) and secondary (fundamentalsTimeSeries) sources;
+ * primary fields win, secondary fills gaps.
+ */
+function buildStatementsByPeriod(bucket) {
   const byDate = new Map();
-  const collect = (rows, key) => {
+
+  const collect = (rows, key, primary) => {
     for (const row of rows || []) {
       const dt = toDateStr(row?.asOfDate ?? row?.endDate ?? row?.date);
       if (!dt) continue;
       const entry = byDate.get(dt) || { periodEnd: dt, income: {}, balance: {}, cashFlow: {} };
-      entry[key] = flattenStatementRow(row);
+      const flat = flattenStatementRow(row);
+      if (primary) {
+        // Primary fields overwrite (they're more authoritative)
+        entry[key] = { ...entry[key], ...flat };
+      } else {
+        // Secondary only fills missing fields
+        for (const [k, v] of Object.entries(flat)) {
+          if (entry[key][k] == null) entry[key][k] = v;
+        }
+      }
       byDate.set(dt, entry);
     }
   };
-  collect(annualOrQuarterly.incomeStatement, "income");
-  collect(annualOrQuarterly.balanceSheet,    "balance");
-  collect(annualOrQuarterly.cashFlow,        "cashFlow");
+
+  collect(bucket.primary?.incomeStatement, "income",   true);
+  collect(bucket.primary?.balanceSheet,    "balance",  true);
+  collect(bucket.primary?.cashFlow,        "cashFlow", true);
+  collect(bucket.secondary?.incomeStatement, "income",   false);
+  collect(bucket.secondary?.balanceSheet,    "balance",  false);
+  collect(bucket.secondary?.cashFlow,        "cashFlow", false);
+
   return [...byDate.values()].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
 }
 
@@ -291,6 +348,33 @@ function computeROCE(income, balance) {
   const capitalEmployed = totalAssets - currentLiab;
   if (capitalEmployed <= 0) return null;
   return round((ebit / capitalEmployed) * 100, 2);
+}
+
+/** ROA = Net Income / Total Assets. Returns %. */
+function computeROA(income, balance, fdFallback) {
+  const ni = firstNonNull(income.netIncome, income.netIncomeCommonStockholders);
+  const totalAssets = firstNonNull(balance.totalAssets);
+  if (ni != null && totalAssets != null && totalAssets > 0) {
+    return round((ni / totalAssets) * 100, 2);
+  }
+  // Fall back to Yahoo's pre-computed value
+  return toPct(fdFallback);
+}
+
+/**
+ * Detect if a stock is a financial company (bank, NBFC, insurance, AMC).
+ * For these, ROCE is not meaningful and totalRevenue is often missing — use
+ * ROA and netIncome history as proxies instead.
+ */
+function isFinancialCompany(quote) {
+  const ap = quote?.assetProfile ?? quote?.summaryProfile ?? {};
+  const industry = (ap.industry ?? "").toLowerCase();
+  const sector = (ap.sector ?? "").toLowerCase();
+  const FINANCIAL_KEYWORDS = [
+    "bank", "insurance", "asset management", "capital markets",
+    "credit services", "financial services", "mortgage", "diversified financial",
+  ];
+  return FINANCIAL_KEYWORDS.some((kw) => industry.includes(kw) || sector.includes(kw));
 }
 
 /** EBITDA = EBIT + D&A. */
@@ -369,11 +453,19 @@ function cagr(start, end, years) {
   return round((Math.pow(end / start, 1 / years) - 1) * 100, 2);
 }
 
-/** Compute revenue/PAT/EBITDA CAGR from annual statements (descending by date). */
+/** Compute revenue/PAT/EBITDA CAGR from annual statements (descending by date).
+ *  For banks: totalRevenue is typically null. Falls back to totalInterestIncome
+ *  or netInterestIncome (banks' nearest equivalent to "revenue").
+ */
 function computeGrowthMetrics(annualStmts) {
   if (!annualStmts.length) return { revenueCagr3y: null, patCagr3y: null, ebitdaCagr3y: null, revenueYoY: null, patYoY: null };
 
-  const getRevenue = (s) => firstNonNull(s.income.totalRevenue, s.income.operatingRevenue);
+  const getRevenue = (s) => firstNonNull(
+    s.income.totalRevenue,
+    s.income.operatingRevenue,
+    s.income.totalInterestIncome,
+    s.income.netInterestIncome,
+  );
   const getPAT     = (s) => firstNonNull(s.income.netIncome, s.income.netIncomeCommonStockholders);
   const getEBITDA  = (s) => computeEBITDA(s.income, s.cashFlow);
 
@@ -417,9 +509,18 @@ function buildFundamentalsRecord(stockId, merged) {
 
   const annualStmts = buildStatementsByPeriod(merged.annual);
   const latest = annualStmts[0] ?? { income: {}, balance: {}, cashFlow: {} };
+  const isFinancial = isFinancialCompany(merged.quote);
 
-  // Raw values
-  const revenueRaw   = firstNonNull(latest.income.totalRevenue, latest.income.operatingRevenue, unwrap(fd.totalRevenue));
+  // Raw values. For banks, totalRevenue is often null — fall back to interest
+  // income or use the Yahoo financialData figure (which is computed differently
+  // by Yahoo for financial companies).
+  const revenueRaw   = firstNonNull(
+    latest.income.totalRevenue,
+    latest.income.operatingRevenue,
+    latest.income.totalInterestIncome,
+    latest.income.netInterestIncome,
+    unwrap(fd.totalRevenue),
+  );
   const patRaw       = firstNonNull(latest.income.netIncome, latest.income.netIncomeCommonStockholders, unwrap(fd.netIncomeToCommon));
   const ebitRaw      = firstNonNull(latest.income.ebit, latest.income.operatingIncome);
   const ebitdaRaw    = computeEBITDA(latest.income, latest.cashFlow) ?? unwrap(fd.ebitda);
@@ -438,9 +539,13 @@ function buildFundamentalsRecord(stockId, merged) {
   const opMargin       = (ebitRaw != null && revenueRaw) ? round((ebitRaw / revenueRaw) * 100, 2) : toPct(unwrap(fd.operatingMargins));
   const netMargin      = (patRaw != null && revenueRaw) ? round((patRaw / revenueRaw) * 100, 2) : toPct(unwrap(fd.profitMargins));
 
-  // True ROCE from statements, with Yahoo ROE as direct field
-  const roce = computeROCE(latest.income, latest.balance);
+  // True ROCE from statements. Skipped for financials — ROCE doesn't apply to
+  // banks/NBFCs/insurance where "capital employed" isn't well-defined (most
+  // assets are funded by customer deposits, not capital).
+  const roce = isFinancial ? null : computeROCE(latest.income, latest.balance);
   const roe  = toPct(unwrap(fd.returnOnEquity));
+  // ROA is the relevant return metric for financials; useful complement otherwise.
+  const roa  = computeROA(latest.income, latest.balance, unwrap(fd.returnOnAssets));
 
   // Quality / health
   const cashConversion   = computeCashConversion(latest.cashFlow, latest.income);
@@ -488,6 +593,8 @@ function buildFundamentalsRecord(stockId, merged) {
     pb: round(pb),
     roe,
     roce,
+    roa,
+    is_financial: isFinancial,
     debt_to_equity: round(unwrap(fd.debtToEquity)),
     net_margin: netMargin,
     operating_margin: opMargin,
@@ -689,13 +796,17 @@ async function processStock(stock, dryRun) {
   );
   const populated = numericFields.length;
 
+  const retLabel = fundamentalsRecord.is_financial
+    ? `roa=${fundamentalsRecord.roa ?? "—"}% (fin)`
+    : `roce=${fundamentalsRecord.roce ?? "—"}%`;
   console.log(
     `  [${symbol}] source=${merged.source} | ` +
     `populated=${populated} | ` +
-    `roce=${fundamentalsRecord.roce ?? "—"}% | ` +
+    `${retLabel} | ` +
     `peg=${fundamentalsRecord.peg ?? "—"} | ` +
     `fcf=${fundamentalsRecord.fcf_cr ?? "—"}Cr | ` +
-    `rev_cagr=${fundamentalsRecord.revenue_cagr_3y ?? "—"}%`
+    `rev_cagr=${fundamentalsRecord.revenue_cagr_3y ?? "—"}% | ` +
+    `pat_cagr=${fundamentalsRecord.pat_cagr_3y ?? "—"}%`
   );
 
   if (dryRun) return { ok: true, dryRun: true };
